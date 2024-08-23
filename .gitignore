@@ -3,3 +3,4 @@ db
 database
 ConvFinQA
 chroma-viewer
+*.pyc
