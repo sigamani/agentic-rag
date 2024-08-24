@@ -35,19 +35,3 @@ def format_document(entry: dict) -> Document:
     
     return Document(id=entry['id'], page_content=full_text, metadata={"qa": str(entry.get('qa'))})
     
-def create_question_to_document_map(filepath: str, limit: int = None):
-    q2d = {}
-
-    with open(filepath, 'r') as f:
-        data = json.load(f)
-    
-    QA_FIELDS = ["qa", *[f"qa_{i}" for i in range(10)]]
-    if limit:
-        data = data[:limit]
-
-    for entry in tqdm(data):
-        # Loop through every available QA field in the entry
-        for qa_field in set(QA_FIELDS).intersection(entry.keys()):
-            q2d[entry[qa_field]["question"]] = format_document(entry)
-  
-    return q2d

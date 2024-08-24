@@ -6,7 +6,7 @@ from prompts import prompt_template
 
 from state import AgentState
 
-from retrieve import RelevantDocumentRetriever
+from retrieve import RelevantDocumentRetriever, vector_store
 from llm import llm
 
 
@@ -20,7 +20,28 @@ def extract_question(state: AgentState) -> AgentState:
 
 def retrieve_relevant_only(state: AgentState) -> AgentState:
     question = state['question']
-    return {"documents": [cheating_retriever.query(question)]}
+    return {"documents": cheating_retriever.query(question)}
+
+def retrieve_from_vector_db(state: AgentState) -> AgentState:
+    question = state["question"]
+    result = vector_store.similarity_search(question, k=5)
+
+    return {
+        "steps": [f"retrieve('{question}')"], 
+        "documents": result, 
+    }
+
+# Post-processing
+def format_docs(docs):
+    return "\n\n".join(doc.page_content for doc in docs)
+    
+def rerank(state: AgentState) -> AgentState:
+    question = state["question"]
+    documents = state["documents"]
+
+    # TODO: rerank
+
+    return {"steps": ["rerank"]}
 
 # Post-processing
 def format_docs(docs: list[Document]):
