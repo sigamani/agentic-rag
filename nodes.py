@@ -1,37 +1,41 @@
+from datetime import datetime
 import os
 import re
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.documents import Document
 from config import DATA_PATH
 from prompts import prompt_template
-
 from state import AgentState
 
 from retrieve import RelevantDocumentRetriever, vector_store
 from llm import llm, MODEL_NAME
+from langfuse.decorators import observe
 
 import dotenv
 dotenv.load_dotenv()
 
 cheating_retriever = RelevantDocumentRetriever(DATA_PATH)
-CHEATING_RETRIEVAL = False
-DISABLE_GENERATION = True
+CHEATING_RETRIEVAL = True
+DISABLE_GENERATION = False
 
+@observe()
 def extract_question(state: AgentState) -> AgentState:
     messages = state["messages"]
     question = messages[-1].content
     return {"question": question, "steps": ["extract_question"]}
 
+@observe()
 def retrieve(state: AgentState) -> AgentState:
     if CHEATING_RETRIEVAL:
         return retrieve_relevant_only(state)
     else:
         return retrieve_from_vector_db(state)
-
+@observe()
 def retrieve_relevant_only(state: AgentState) -> AgentState:
     question = state['question']
     return {"documents": cheating_retriever.query(question)}
 
+@observe()
 def retrieve_from_vector_db(state: AgentState) -> AgentState:
     question = state["question"]
     result = vector_store.similarity_search(question, k=5)
@@ -41,10 +45,8 @@ def retrieve_from_vector_db(state: AgentState) -> AgentState:
         "documents": result, 
     }
 
-# Post-processing
-def format_docs(docs):
-    return "\n\n".join(doc.page_content for doc in docs)
     
+@observe()
 def rerank(state: AgentState) -> AgentState:
     question = state["question"]
     documents = state["documents"]
@@ -57,6 +59,7 @@ def rerank(state: AgentState) -> AgentState:
 def format_docs(docs: list[Document]):
     return "\n\n".join(doc.page_content for doc in docs)
 
+@observe()
 def generate(state: AgentState) -> AgentState:
     question = state["question"]
     documents = state["documents"]
@@ -69,8 +72,10 @@ def generate(state: AgentState) -> AgentState:
     else:
         response = llm.completions.create(model=MODEL_NAME, prompt=prompt)
         response_message = AIMessage(response.choices[0].text)
+
     return {"messages": [response_message], "prompt": prompt, "generation": response_message.content}
 
+@observe()
 def generate_chat(state: AgentState) -> AgentState:
     messages = state["messages"]
     question = state["question"]
@@ -93,6 +98,7 @@ def generate_chat(state: AgentState) -> AgentState:
     response_message = AIMessage(response.choices[0].message.content)
     return {"messages": [response_message], "prompt": messages_openai, "generation": response_message.content}
 
+@observe()
 def extract_answer(state: AgentState) -> AgentState:
     last_message = state["messages"][-1].content
 
