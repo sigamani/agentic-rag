@@ -1,6 +1,5 @@
 .venv
-db
-database
 ConvFinQA
-chroma-viewer
 *.pyc
+.env
+vector_database

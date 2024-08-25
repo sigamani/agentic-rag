@@ -22,16 +22,18 @@ class CustomEmbeddings:
     def embed_query(self, query: str) -> list[float]:
         return self.model.encode([query])[0].tolist()
 
+DB_PATH = "./vector_database"
+
 # ChromaDB setup
 sentence_transformer_ef = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=EMBEDDING_MODEL)
-chromadb_client = chromadb.PersistentClient(path="./database")
+chromadb_client = chromadb.PersistentClient(path=DB_PATH)
 db = chromadb_client.get_or_create_collection(name=COLLECTION_NAME, embedding_function=sentence_transformer_ef)
 
 # Langchain Setup
 vector_store = Chroma(
     client=chromadb_client,
     collection_name=COLLECTION_NAME,
-    persist_directory="./db",  # Where to save data locally, remove if not neccesary
+    persist_directory=DB_PATH,  # Where to save data locally, remove if not neccesary
     embedding_function=CustomEmbeddings(EMBEDDING_MODEL)
 )
 

@@ -33,5 +33,5 @@ def format_document(entry: dict) -> Document:
     # Combine all text and table data
     full_text = combined_text + "\n\n" + "Table Data:\n" + table_text
     
-    return Document(id=entry['id'], page_content=full_text, metadata={"qa": str(entry.get('qa'))})
+    return Document(id=entry['id'], page_content=full_text, metadata={"id": entry['id'], "qa": str(entry.get('qa'))})
     
