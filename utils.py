@@ -35,3 +35,8 @@ def format_document(entry: dict) -> Document:
     
     return Document(id=entry['id'], page_content=full_text, metadata={"id": entry['id'], "qa": str(entry.get('qa'))})
     
+
+# Apply Llama3.1 chat-template
+def format_prompt(user_query):
+    template = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nYou are a helpful assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"""
+    return template.format(user_query)

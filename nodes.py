@@ -4,7 +4,7 @@ import re
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.documents import Document
 from config import DATA_PATH
-from prompts import prompt_template
+from prompts import reason_and_answer_prompt_template, extract_anwer_prompt_template
 from state import AgentState
 
 from retrieve import RelevantDocumentRetriever, vector_store
@@ -12,11 +12,14 @@ from llm import llm, MODEL_NAME
 from langfuse.decorators import observe
 
 import dotenv
+
+from utils import format_prompt
 dotenv.load_dotenv()
 
 cheating_retriever = RelevantDocumentRetriever(DATA_PATH)
 CHEATING_RETRIEVAL = True
 DISABLE_GENERATION = False
+MAX_TOKENS = 4096
 
 @observe()
 def extract_question(state: AgentState) -> AgentState:
@@ -64,13 +67,13 @@ def generate(state: AgentState) -> AgentState:
     question = state["question"]
     documents = state["documents"]
 
-    prompt = prompt_template.format(**{"question": question, "documents": format_docs(documents)})
+    prompt = reason_and_answer_prompt_template.format(**{"question": question, "documents": format_docs(documents)})
 
     if DISABLE_GENERATION:
         # This is useful for retrieval development
         response_message = AIMessage("[GENERATION DISABLED]")
     else:
-        response = llm.completions.create(model=MODEL_NAME, prompt=prompt)
+        response = llm.completions.create(model=MODEL_NAME, prompt=format_prompt(prompt), max_tokens=MAX_TOKENS, temperature=0, top_p=0.5)
         response_message = AIMessage(response.choices[0].text)
 
     return {"messages": [response_message], "prompt": prompt, "generation": response_message.content}
@@ -81,7 +84,7 @@ def generate_chat(state: AgentState) -> AgentState:
     question = state["question"]
     documents = state["documents"]
 
-    prompt = prompt_template.format(**{"question": question, "documents": format_docs(documents)})
+    prompt = reason_and_answer_prompt_template.format(**{"question": question, "documents": format_docs(documents)})
     messages[-1] = HumanMessage(prompt)
     
     messages_openai = []
@@ -105,4 +108,11 @@ def extract_answer(state: AgentState) -> AgentState:
     match = re.search(r'<ANSWER>(.*?)</ANSWER>', last_message, re.DOTALL)
     extracted_answer = match.group(1).strip() if match else ""
 
+    # Sometimes, the <ANSWER> tags are missing/corrupted even though the answer is written
+    # In these cases, we can use LLM to extract the answer
+    if not extracted_answer:
+        prompt = extract_anwer_prompt_template.format_prompt(**{"question": state["question"], "generation": state["generation"]})
+        extracted_answer = llm.completions.create(model=MODEL_NAME, prompt=format_prompt(prompt), max_tokens=100).choices[0].text
+        extracted_answer = extracted_answer.replace("<OUTPUT>", "").replace("</OUTPUT>", "")
+        extracted_answer = extracted_answer.replace("<ANSWER>", "").replace("</ANSWER>", "")
     return {"answer": extracted_answer}
