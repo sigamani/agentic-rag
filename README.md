@@ -5,3 +5,4 @@ TODO:
 - If no answer, try again
 - Improve retrieval (HyDe, query reranking)
 - langfuse dataset run does not show input/output, also each input has its own empty col?
+- Replace XML in prompts with something better (YAML?)

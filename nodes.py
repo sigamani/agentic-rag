@@ -4,8 +4,12 @@ import re
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.documents import Document
 from config import DATA_PATH
-from prompts import reason_and_answer_prompt_template, extract_anwer_prompt_template
+from prompts import (reason_and_answer_prompt_template, 
+                     extract_anwer_prompt_template, 
+                     filter_context_prompt_template, 
+                     generate_queries_prompt_template)
 from state import AgentState
+import xmltodict
 
 from retrieve import RelevantDocumentRetriever, vector_store
 from llm import llm, MODEL_NAME
@@ -14,12 +18,15 @@ from langfuse.decorators import observe
 import dotenv
 
 from utils import format_prompt
+import cohere
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 
 dotenv.load_dotenv()
 
 cheating_retriever = RelevantDocumentRetriever(DATA_PATH)
-CHEATING_RETRIEVAL = True
-DISABLE_GENERATION = False
+CHEATING_RETRIEVAL = False
+DISABLE_GENERATION = True
 MAX_TOKENS = 4096
 
 
@@ -27,7 +34,7 @@ MAX_TOKENS = 4096
 def extract_question(state: AgentState) -> AgentState:
     messages = state["messages"]
     question = messages[-1].content
-    return {"question": question, "steps": ["extract_question"]}
+    return {"question": question}
 
 
 @observe()
@@ -44,39 +51,111 @@ def retrieve_relevant_only(state: AgentState) -> AgentState:
     return {"documents": cheating_retriever.query(question)}
 
 
+
 @observe()
 def retrieve_from_vector_db(state: AgentState) -> AgentState:
-    question = state["question"]
-    result = vector_store.similarity_search(question, k=5)
+    queries = state["queries"]
+    
+    results = []
+    unique_docs = {}
+
+    # Function to search and return results for a query
+    def search_query(query):
+        return vector_store.similarity_search(query, k=5)
+    
+    # Parallelize the search across queries
+    with ThreadPoolExecutor() as executor:
+        future_to_query = {executor.submit(search_query, query): query for query in queries}
+        
+        for future in as_completed(future_to_query):
+            search_results = future.result()
+            for doc in search_results:
+                doc_id = doc.metadata["id"]
+                if doc_id not in unique_docs:
+                    unique_docs[doc_id] = doc
+
+    results = list(unique_docs.values())
 
     return {
-        "steps": [f"retrieve('{question}')"],
-        "documents": result,
+        "documents": results,
+    }
+
+
+def generate_queries(state: AgentState) -> AgentState:
+    question = state["question"]
+    prompt = generate_queries_prompt_template.format(question=question)
+    response = llm.completions.create(prompt=format_prompt(prompt), model=MODEL_NAME, max_tokens=MAX_TOKENS, temperature=0)
+
+    queries = response.choices[0].text.split('\n') 
+    queries.append(question) # add original question
+
+    return {
+        "queries": queries,
     }
 
 
 @observe()
-def rerank(state: AgentState) -> AgentState:
+def filter_context(state: AgentState) -> AgentState:
     question = state["question"]
-    documents = state["documents"]
+    documents = state["reranked_documents"]
+    
+    prompt = filter_context_prompt_template.format(question=question, documents=format_docs(documents))
+    response = llm.completions.create(prompt=format_prompt(prompt), model=MODEL_NAME, max_tokens=MAX_TOKENS, temperature=0)        
+    response_text = response.choices[0].text.replace("<OUTPUT>","").replace("</OUTPUT>","")
 
-    # TODO: rerank
+    try:
+        context, sources = re.split("sources:", response_text, flags=re.IGNORECASE, maxsplit=1)
+        context = context.strip()
+        sources = [source.strip().lstrip("-").lstrip() for source in re.split("sources:", response_text, flags=re.IGNORECASE)[1].split('\n')]
+        if '' in sources:
+            sources.remove('')
+    except IndexError:
+        # when there are no sources provided (due to no information found or LLM error)
+        sources = []
 
-    return {"steps": ["rerank"]}
+    return {
+        "context": context,
+        "sources": sources
+    }
 
+@observe()
+def rerank(state: AgentState) -> AgentState:
+    co = cohere.Client(os.getenv("COHERE_API_KEY"))
 
-# Post-processing
-def format_docs(docs: list[Document]):
-    return "\n\n".join(doc.page_content for doc in docs)
+    docs = [
+        {"text": doc.page_content , "id": doc.metadata["id"]} for doc in state['documents']
+    ]
 
+    response = co.rerank(
+        model="rerank-english-v3.0",
+        query=state["question"],
+        documents=docs,
+        top_n=3,
+    )
+
+    reranked_docs = [
+        state['documents'][result.index]
+        for result in response.results
+    ]
+    
+    return {
+        "reranked_documents": reranked_docs,
+        "context": format_docs(reranked_docs)
+    }
+
+def format_docs(docs: list[Document]) -> str:
+    formatted = ""
+    for doc in docs:
+        formatted += f"<DOC ID={doc.metadata['id']}>\n{doc.page_content}\n</DOC>"
+    return formatted
 
 @observe()
 def generate(state: AgentState) -> AgentState:
     question = state["question"]
-    documents = state["documents"]
+    context = state["context"]
 
     prompt = reason_and_answer_prompt_template.format(
-        **{"question": question, "documents": format_docs(documents)}
+        **{"question": question, "context": context}
     )
 
     if DISABLE_GENERATION:
@@ -93,7 +172,6 @@ def generate(state: AgentState) -> AgentState:
         response_message = AIMessage(response.choices[0].text)
 
     return {
-        "messages": [response_message],
         "prompt": prompt,
         "generation": response_message.content,
     }
@@ -123,7 +201,6 @@ def generate_chat(state: AgentState) -> AgentState:
     response = llm.chat.completions.create(model=MODEL_NAME, messages=messages_openai)
     response_message = AIMessage(response.choices[0].message.content)
     return {
-        "messages": [response_message],
         "prompt": messages_openai,
         "generation": response_message.content,
     }
@@ -131,17 +208,21 @@ def generate_chat(state: AgentState) -> AgentState:
 
 @observe()
 def extract_answer(state: AgentState) -> AgentState:
-    last_message = state["messages"][-1].content
+    if DISABLE_GENERATION:
+        return {"answer": "NO ANSWER"}
+    
+    generation = state["generation"]
 
-    match = re.search(r"<ANSWER>(.*?)</ANSWER>", last_message, re.DOTALL)
+    match = re.search(r"<ANSWER>(.*?)</ANSWER>", generation, re.DOTALL)
     extracted_answer = match.group(1).strip() if match else ""
 
     # Sometimes, the <ANSWER> tags are missing/corrupted even though the answer is written
     # In these cases, we can use LLM to extract the answer
     if not extracted_answer:
         prompt = extract_anwer_prompt_template.format_prompt(
-            **{"question": state["question"], "generation": state["generation"]}
+            **{"question": state["question"], "generation": generation}
         )
+        print(f"Extracting answer using LLM... {prompt}")
         extracted_answer = (
             llm.completions.create(
                 model=MODEL_NAME, prompt=format_prompt(prompt), max_tokens=100

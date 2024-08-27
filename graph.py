@@ -11,12 +11,12 @@ import dotenv
 
 from nodes import (
     extract_question,
-    retrieve_relevant_only,
     generate,
     extract_answer,
     retrieve,
-    retrieve_from_vector_db,
     rerank,
+    generate_queries,
+    filter_context,
 )
 from state import AgentState
 
@@ -34,20 +34,28 @@ def answer_exists(state: AgentState) -> AgentState:
 
 
 workflow = StateGraph(AgentState, config_schema=GraphConfig)
+
+# Nodes
 workflow.add_node("extract_question", extract_question)
+workflow.add_node("generate_queries", generate_queries)
 workflow.add_node("retriever", retrieve)
 workflow.add_node("reranker", rerank)
+workflow.add_node("context_filter", filter_context)
 workflow.add_node("generator", generate)
 workflow.add_node("extract_answer", extract_answer)
 
-workflow.add_edge("extract_question", "retriever")
-workflow.add_edge("retriever", "reranker")
-workflow.add_edge("reranker", "generator")
-workflow.add_edge("generator", "extract_answer")
-# workflow.add_conditional_edges("extract_answer", answer_exists, {True: END, False: "generator"})
-
+# Edges
 workflow.set_entry_point("extract_question")
+
+workflow.add_edge("extract_question", "generate_queries")
+workflow.add_edge("generate_queries", "retriever")
+workflow.add_edge("retriever", "reranker")
+workflow.add_edge("reranker", "context_filter")
+workflow.add_edge("context_filter", "generator")
+workflow.add_edge("generator", "extract_answer")
+
 workflow.set_finish_point("extract_answer")
+
 graph = workflow.compile()
 
 
