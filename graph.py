@@ -9,18 +9,29 @@ from langchain.prompts import PromptTemplate
 from operator import add
 import dotenv
 
-from nodes import extract_question, retrieve_relevant_only, generate, extract_answer, retrieve, retrieve_from_vector_db, rerank
+from nodes import (
+    extract_question,
+    retrieve_relevant_only,
+    generate,
+    extract_answer,
+    retrieve,
+    retrieve_from_vector_db,
+    rerank,
+)
 from state import AgentState
 
 from langfuse_config import langfuse, langfuse_handler
 
 dotenv.load_dotenv()
 
+
 class GraphConfig(TypedDict):
     retrieval_k: int = 5
 
+
 def answer_exists(state: AgentState) -> AgentState:
-    return state['answer']
+    return state["answer"]
+
 
 workflow = StateGraph(AgentState, config_schema=GraphConfig)
 workflow.add_node("extract_question", extract_question)
@@ -33,7 +44,7 @@ workflow.add_edge("extract_question", "retriever")
 workflow.add_edge("retriever", "reranker")
 workflow.add_edge("reranker", "generator")
 workflow.add_edge("generator", "extract_answer")
-    # workflow.add_conditional_edges("extract_answer", answer_exists, {True: END, False: "generator"})
+# workflow.add_conditional_edges("extract_answer", answer_exists, {True: END, False: "generator"})
 
 workflow.set_entry_point("extract_question")
 workflow.set_finish_point("extract_answer")
@@ -41,11 +52,13 @@ graph = workflow.compile()
 
 
 if __name__ == "__main__":
-    import pprint    
+    import pprint
 
     inputs = {
         "messages": [
-            HumanMessage('what was the percentage change in the net cash from operating activities from 2008 to 2009'),
+            HumanMessage(
+                "what was the percentage change in the net cash from operating activities from 2008 to 2009"
+            ),
         ]
     }
 

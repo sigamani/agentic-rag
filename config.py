@@ -1,1 +1,1 @@
-DATA_PATH = 'ConvFinQA/data/train.json'
+DATA_PATH = "ConvFinQA/data/train.json"

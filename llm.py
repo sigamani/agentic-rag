@@ -12,10 +12,6 @@ MODEL_NAME = os.getenv("LLM_MODEL", "llama3.1")
 llm = OpenAI(api_key=LLM_API_KEY, base_url=LLM_API_BASE)
 
 if __name__ == "__main__":
-    out = llm.completions.create(
-        model=MODEL_NAME,
-        prompt="Hello World",
-        max_tokens=10
-    )
+    out = llm.completions.create(model=MODEL_NAME, prompt="Hello World", max_tokens=10)
 
     print(out)
