@@ -1,3 +1,4 @@
+import csv
 from datetime import datetime
 import os
 import re
@@ -26,7 +27,7 @@ dotenv.load_dotenv()
 
 cheating_retriever = RelevantDocumentRetriever(DATA_PATH)
 CHEATING_RETRIEVAL = False
-DISABLE_GENERATION = True
+DISABLE_GENERATION = False
 MAX_TOKENS = 4096
 
 
@@ -212,7 +213,6 @@ def extract_answer(state: AgentState) -> AgentState:
         return {"answer": "NO ANSWER"}
     
     generation = state["generation"]
-
     match = re.search(r"<ANSWER>(.*?)</ANSWER>", generation, re.DOTALL)
     extracted_answer = match.group(1).strip() if match else ""
 
