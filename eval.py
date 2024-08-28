@@ -16,6 +16,7 @@ from prompts import eval_prompt_template
 from config import LANGFUSE_DATASET_NAME
 
 from tqdm.auto import tqdm
+import time
 
 dotenv.load_dotenv()
 
@@ -104,11 +105,11 @@ def correctness_score(input, predicted, expected):
     out_text = out.choices[0].text
     out_text = out_text.replace("<OUTPUT>", "").replace("</OUTPUT>", "")
     try:
-        float_out = float(out_text)
+        float_out = abs(float(out_text))
     except Exception:
         float_out = None # Error
         print(f"Error generating score (generated: {out_text})")
-    return abs(float_out)
+    return float_out
 
 def run_eval():
     answer_correctness_scores = []
@@ -116,6 +117,7 @@ def run_eval():
     retrieval_recall_scores = []
     reranker_precision_scores = []
     reranker_recall_scores = []
+    latencies = []
     out = []
 
     run_name = f"{datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -132,8 +134,11 @@ def run_eval():
             ]
         }
 
+        start = time.time()
         output = graph.invoke(inputs, config={"callbacks": [handler]})
-
+        latency = time.time() - start
+        latencies.append(latency)
+        
         question = output['question']
         answer = output['answer']
         generation = output['generation']
@@ -170,7 +175,7 @@ def run_eval():
         print(f"Reranker Precision: {reranker_precision:.2%} ({reranker_precision - retrieval_precision:+.2%})")
         print(f"Reranker Recall: {reranker_recall:.2%} ({reranker_recall - retrieval_recall:+.2%})")
         print(f"Correctness: {correctness:.2%}") if correctness else print(f"Correctness: {correctness}")
-
+        print(f"Latency: {latency:.2f}s")
         # Show generation for debugging, when retrieval was correct but answer was not
         if not correctness or ((correctness < .5) and (retrieval_recall > 0)):
             print(f"Generation: {generation}")
@@ -240,6 +245,7 @@ def run_eval():
                     "reranker_precision": reranker_precision,
                     "reranker_recall": reranker_recall,
                     "prompt": output["prompt"],
+                    "latency": latency,
                     })
 
         out_df = pd.DataFrame.from_records(out)
@@ -264,6 +270,7 @@ def run_eval():
         print(f"Mean Retrieval Recall: {mean_retrieval_recall_score:.2%}")
         print(f"Mean Reranker Precision: {mean_reranker_precision_score:.2%} ({mean_reranker_precision_score - mean_retrieval_precision_score:+.2%})")
         print(f"Mean Reranker Recall: {mean_reranker_recall_score:.2%} ({mean_reranker_recall_score - mean_retrieval_recall_score:+.2%})")
+        print(f"Mean Latency: {sum(latencies) / len(latencies):.2f}s")
         print(f"{'='*50}")
 
     # Flush the langfuse client to ensure all data is sent to the server at the end of the experiment run
