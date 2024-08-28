@@ -1,7 +1,8 @@
 from typing import TypedDict
 
 DATA_PATH = "ConvFinQA/data/train.json"
-DATA_LIMIT = 1000
+DATA_LIMIT_EVAL = 1000
+DATA_LIMIT_DB = 10000
 CHEATING_RETRIEVAL = False
 DISABLE_GENERATION = False
 LANGFUSE_DATASET_NAME = "convfinqa-train"

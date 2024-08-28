@@ -131,26 +131,6 @@ This workflow is designed to take a user's question, generate relevant queries, 
 - **Code Refactor**: Improve code structure and readability through refactoring, dockerize, reorganize project structure, add logging.
 - **Fine-Tuning Models**: Experiment with fine-tuning language models specifically on financial documents to improve performance.
 
-## Observations
-
-
-### Context extraction experiment
-See
-- **Context Extraction**: Using a context extraction step resulted in a significant recall loss without sufficient gains in precision. **Decision:** Removed the context extraction step.
-- **Reranking Step**: The reranking step significantly reduces the amount of context while barely sacrificing recall, making it a valuable addition. **Decision:** Keeping the reranking step.
-
-#### Results
-Below are some results with an older version of the model on the first 100 samples from `train.json`. (Change is calculated relative to the previous step: retrieval -> reranker -> context extraction.)
-
-| Metric                               | Value (%) | Change (%)        |
-|--------------------------------------|-----------|-------------------|
-| Mean Retrieval Precision             | 2.58      | -                 |
-| Mean Retrieval Recall                | 31.15     | -                 |
-| Mean Reranking Precision             | 9.84      | +7.25             |
-| Mean Reranking Recall                | 29.51     | -1.64             |
-| Mean Context Extraction Precision    | 12.84     | +3.01             |
-| Mean Context Extraction Recall       | 19.67     | -9.84             |
-
 ### Explanation of Metrics
 
 The code evaluates the performance of a system designed to answer questions using retrieved documents and generated answers. Below is an explanation of the metrics used in the evaluation:
@@ -182,3 +162,23 @@ At the end of the evaluation, the code calculates and prints average scores for 
 - **Mean Reranker Recall Score**: The average reranker recall score across all items, along with the difference from the mean retrieval recall score.
 
 These metrics help evaluate both the retrieval effectiveness (how well relevant documents are retrieved) and the generation correctness (how accurately answers are generated based on those documents).
+
+
+## Observations
+
+### Context extraction experiment
+See
+- **Context Extraction**: Using a context extraction step resulted in a significant recall loss without sufficient gains in precision. **Decision:** Removed the context extraction step.
+- **Reranking Step**: The reranking step significantly reduces the amount of context while barely sacrificing recall, making it a valuable addition. **Decision:** Keeping the reranking step.
+
+#### Results
+Below are some results with an older version of the model on the first 100 samples from `train.json`. (Change is calculated relative to the previous step: retrieval -> reranker -> context extraction.)
+
+| Metric                               | Value (%) | Change (%)        |
+|--------------------------------------|-----------|-------------------|
+| Mean Retrieval Precision             | 2.58      | -                 |
+| Mean Retrieval Recall                | 31.15     | -                 |
+| Mean Reranking Precision             | 9.84      | +7.25             |
+| Mean Reranking Recall                | 29.51     | -1.64             |
+| Mean Context Extraction Precision    | 12.84     | +3.01             |
+| Mean Context Extraction Recall       | 19.67     | -9.84             |

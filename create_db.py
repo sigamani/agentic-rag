@@ -1,7 +1,7 @@
 import json
 from retrieve import chromadb_client, sentence_transformer_ef
 from utils import format_document
-from config import DATA_PATH, DATA_LIMIT, COLLECTION_NAME
+from config import DATA_PATH, DATA_LIMIT_DB, COLLECTION_NAME
 
 def parse_convfinqa_dataset(filepath, limit: int = None):
     with open(filepath, 'r') as f:
@@ -26,7 +26,7 @@ except ValueError:
 
 db = chromadb_client.create_collection(name=COLLECTION_NAME, embedding_function=sentence_transformer_ef)
 
-docs = parse_convfinqa_dataset(DATA_PATH, limit=DATA_LIMIT)
+docs = parse_convfinqa_dataset(DATA_PATH, limit=DATA_LIMIT_DB)
 ids = [doc.id for doc in docs]
 texts = [doc.page_content for doc in docs]
 metadatas = [doc.metadata for doc in docs]

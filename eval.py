@@ -1,4 +1,4 @@
-from config import DATA_LIMIT
+from config import DATA_LIMIT_EVAL
 from langfuse_config import langfuse
 from llm import llm
 from graph import graph
@@ -83,7 +83,7 @@ def correctness_score(input, predicted, expected):
             relative_score(predicted_parsed, expected_parsed_2),
             relative_score(predicted_parsed_2, expected_parsed),
         )
-    except Exception as e:
+    except Exception:
         pass
 
     # Otherwise, use LLM
@@ -94,7 +94,7 @@ def correctness_score(input, predicted, expected):
     out_text = out_text.replace("<OUTPUT>", "").replace("</OUTPUT>", "")
     try:
         float_out = float(out_text)
-    except:
+    except Exception:
         float_out = None # Error
         print(f"Error generating score (generated: {out_text})")
     return float_out
@@ -108,7 +108,7 @@ def run_eval():
     out = []
 
     run_name = f"{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    for item in tqdm(dataset.items[:DATA_LIMIT]):
+    for item in tqdm(dataset.items[:DATA_LIMIT_EVAL]):
         handler = item.get_langchain_handler(
             run_name=run_name,
             run_description="RAG evaluation with ground-truth documents",
@@ -267,6 +267,6 @@ def run_eval():
     langfuse.flush()
 
 if __name__=="__main__":
-    run_eval()
+    run_eval()    
 
 

@@ -48,7 +48,7 @@ graph = workflow.compile()
 
 if __name__ == "__main__":
     import pprint
-    from IPython.display import Image, display
+    from IPython.display import Image
     from langchain_core.runnables.graph import MermaidDrawMethod
     inputs = {
         "messages": [

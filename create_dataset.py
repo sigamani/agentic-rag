@@ -2,7 +2,7 @@ import json
 from langchain_core.documents import Document
 from tqdm.auto import tqdm
 from langfuse_config import langfuse
-from config import DATA_PATH, DATA_LIMIT, LANGFUSE_DATASET_NAME
+from config import DATA_PATH, DATA_LIMIT_EVAL, LANGFUSE_DATASET_NAME
 
 def create_convfinqa_langfuse_dataset(filepath, name, description, limit: int = None) -> list[Document]:
     langfuse.create_dataset(name=name, description=description)
@@ -29,6 +29,6 @@ def create_convfinqa_langfuse_dataset(filepath, name, description, limit: int = 
                 }
             )
 
-create_convfinqa_langfuse_dataset(DATA_PATH, LANGFUSE_DATASET_NAME, "Dataset created from ConvFinQA train data", limit=DATA_LIMIT)
+create_convfinqa_langfuse_dataset(DATA_PATH, LANGFUSE_DATASET_NAME, "Dataset created from ConvFinQA train data", limit=DATA_LIMIT_EVAL)
 
 
