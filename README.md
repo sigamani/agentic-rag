@@ -47,12 +47,17 @@ To solve the hard problem, change `CHEATING_RETRIEVAL` to `False` in [config.py]
 
 ## Usage
 ### 1. Start the vLLM Server
-   Start the vLLM server by running:
+   Skip this step if you have OpenAI (or OpenAI compatible) API access.
+
+   1. Download a vLLM compatible model (I used [Llama-3.1-Storm-8B.Q8_0.gguf](https://huggingface.co/akjindal53244/Llama-3.1-Storm-8B-GGUF/blob/main/Llama-3.1-Storm-8B.Q8_0.gguf))
+   
+   2. Edit [run_serve.sh](run_serve.sh) to adjust it to your GPU capabilities (Currently it's set up for my RTX 3090)
+
+   3. Start the vLLM server by running:
    ```sh
    sh run_serve.sh
    ```
    
-   Edit the file to adjust it to your GPU capabilities (Currently it's set up for my RTX 3090)
 
 ### 2. Create the Vector Database
    Use the script to create a vector database with the data:
@@ -76,7 +81,6 @@ To solve the hard problem, change `CHEATING_RETRIEVAL` to `False` in [config.py]
    This step will evaluate the model's performance and output the results in console and also row-wise in `eval.csv`
 
 ## Todo
-- **Parametrization**: Add parametrization for anything that should be parametrizable (e.g. k in retrieval). Could use a simple configuration file.
 - **Improve Retrieval**: Explore the following methods to enhance retrieval accuracy:
     - Hybrid search with multi-vector representations.
     - Fine-tune embedding models on financial data.
