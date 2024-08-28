@@ -32,6 +32,41 @@ The model does not know which document contains the relevant information and mus
 
 To solve the hard problem, change `CHEATING_RETRIEVAL` to `False` in [config.py](config.py)
 
+# Model
+
+The model is based on a RAG architecture, with some elements of "advanced RAG" such as query rewriting, reranking, answer extraction. In high-level:
+
+## Description
+![Model graph](./graph.png)
+1. **Start Node (`__start__`)**:
+   - This is the entry point of the workflow, marking where the process begins.
+
+2. **Extract Question (`extract_question`)**:
+   - This node extracts the user's question from the input messages. The extracted question is stored in the state for further processing.
+
+3. **Generate Queries (`generate_queries`)**:
+   - This node generates multiple queries based on the extracted question. These queries are used to retrieve relevant documents from a database or knowledge base.
+
+4. **Retriever (`retriever`)**:
+   - This node retrieves documents that are potentially relevant to the generated queries from a database or vector store. It returns these documents for further processing.
+
+5. **Reranker (`reranker`)**:
+   - After retrieving the documents, this node reranks them based on their relevance to the user's question. The reranking is done to prioritize the most relevant documents for the next steps.
+
+6. **Generator (`generator`)**:
+   - This node generates a response based on the reranked documents. It may use a language model to produce an answer that combines information from the top-ranked documents.
+
+7. **Extract Answer (`extract_answer`)**:
+   - This node extracts the final answer from the generated response. It parses the generated text to find the specific answer to the user's question.
+
+8. **End Node (`__end__`)**:
+   - This is the final point of the workflow, marking the completion of the process. The final answer is provided as the output.
+
+### Summary
+
+This workflow is designed to take a user's question, generate relevant queries, retrieve and rerank documents, generate an answer, and finally extract the answer from the generated content. Each node represents a distinct step in this process, ensuring that the question is answered as accurately as possible.
+
+
 ## Prerequisites
 - Python 3.12
 - [Poetry](https://python-poetry.org/docs/#installation)

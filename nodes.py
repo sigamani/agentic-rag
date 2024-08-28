@@ -2,8 +2,7 @@ import os
 import re
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.documents import Document
-from config import DATA_PATH, CHEATING_RETRIEVAL, DISABLE_GENERATION
-from graph import GraphConfig
+from config import DATA_PATH, CHEATING_RETRIEVAL, DISABLE_GENERATION, GraphConfig
 from prompts import (reason_and_answer_prompt_template, 
                      extract_anwer_prompt_template, 
                      filter_context_prompt_template, 
