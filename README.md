@@ -6,6 +6,8 @@ ConvFinQA is a financial question-answering task that involves answering questio
 ## Problem
 The task is to answer questions using the full corpus of the ConvFinQA `train.json` dataset.
 
+See [Explanation of Metrics](#explanation-of-metrics) for a guide on how to interpret the metrics.
+
 ### Easy Variant
 The model has access to the correct document at inference time, so we are only working with a single document at a time.
 
@@ -37,7 +39,9 @@ To solve the hard problem, change `CHEATING_RETRIEVAL` to `False` in [config.py]
 The model is based on a RAG architecture, with some elements of "advanced RAG" such as query rewriting, reranking, answer extraction. In high-level:
 
 ## Description
+
 ![Model graph](./graph.png)
+
 1. **Start Node (`__start__`)**:
    - This is the entry point of the workflow, marking where the process begins.
 
@@ -62,9 +66,55 @@ The model is based on a RAG architecture, with some elements of "advanced RAG" s
 8. **End Node (`__end__`)**:
    - This is the final point of the workflow, marking the completion of the process. The final answer is provided as the output.
 
-### Summary
+## Findings & Shortcomings
+One of the biggest flaws of the model is the retrieval system. as we are only getting 24.14% recall which is the limiting factor for getting high correctness answers downstream. So this should be the main focus on [further improvements](#todo).
 
-This workflow is designed to take a user's question, generate relevant queries, retrieve and rerank documents, generate an answer, and finally extract the answer from the generated content. Each node represents a distinct step in this process, ensuring that the question is answered as accurately as possible.
+More experiments with larger LLMs are needed to make any assessments of the post-retrieval part of the pipeline. For the easy variant of the problem, With a Llama3.1-8B-Storm model we can achieve ~61.86% high correctness rate which roughly aligns with the expectations given the model size.
+
+### Evaluation Results
+#### Easy variant
+
+From the first 120 `train.json` examples:
+
+| Metric                    | Value          |
+|---------------------------|----------------|
+| **Average Correctness**    | 71.09%         |
+| **High Correctness Rate**  | 61.86%         |
+| **Mean Latency (RTX 3090)**| 14.64s         |
+
+You can find row-wise evaluation details in [experiments/eval_easy.csv](experiments/eval_easy.csv)
+
+#### Hard Variant
+
+From the first 120 `train.json` examples:
+
+| Metric                    | Value          |
+|---------------------------|----------------|
+| **Average Correctness**    | 39.36%         |
+| **High Correctness Rate**  | 25.89%         |
+| **Mean Retrieval Precision** | 2.10%       |
+| **Mean Retrieval Recall**  | 26.45%         |
+| **Mean Reranker Precision**| 7.71%          |
+| **Mean Reranker Recall**   | 23.14%         |
+| **Mean Latency (RTX 3090)**| 23.17s         |
+
+You can find row-wise evaluation details in [experiments/eval_hard.csv](experiments/eval_hard.csv)
+
+### Context extraction experiment
+- **Context Extraction**: Using a context extraction step resulted in a significant recall loss without sufficient gains in precision. **Decision:** Removed the context extraction step.
+- **Reranking Step**: The reranking step significantly reduces the amount of context while barely sacrificing recall, making it a valuable addition. **Decision:** Keeping the reranking step.
+
+#### Results
+Below are some results with an older version of the model on the first 100 samples from `train.json`, vector db also only had the same 100 samples. Change is calculated relative to the previous step: retrieval -> reranker -> context extraction.
+
+| Metric                               | Value (%) | Change (%)        |
+|--------------------------------------|-----------|-------------------|
+| Mean Retrieval Precision             | 2.58      | -                 |
+| Mean Retrieval Recall                | 31.15     | -                 |
+| Mean Reranking Precision             | 9.84      | +7.25             |
+| Mean Reranking Recall                | 29.51     | -1.64             |
+| Mean Context Extraction Precision    | 12.84     | +3.01             |
+| Mean Context Extraction Recall       | 19.67     | -9.84             |
 
 
 ## Prerequisites
@@ -77,8 +127,7 @@ This workflow is designed to take a user's question, generate relevant queries, 
 ## Installation
 1. Install dependencies: `poetry install`
 2. Download data: `sh get_data.sh`
-3. Set your `.env` with the correct urls/keys for LLM, Cohere, Langfuse. See [.env.example](.env.example) for reference:
-    - 
+3. Set your `.env` with the correct urls/keys for LLM, Cohere, Langfuse. See [.env.example](.env.example) for reference.
 
 ## Usage
 ### 1. Start the vLLM Server
@@ -127,8 +176,7 @@ This workflow is designed to take a user's question, generate relevant queries, 
 - **Context Trimming**: Improve the process of trimming context to include only the most relevant parts. Previous attempts showed potential but need refinement.
 - **Table Parsing**: Experiment with Chain of Tables ([Google Chain of Table](https://github.com/google-research/chain-of-table)) or other methods for more effective table parsing.
 - **Optimization**: Run hyperparameter optimization for various parameters (e.g. k in retrieval)
-- **Dependency Management**: Remove unnecessary dependencies to streamline the environment.
-- **Code Refactor**: Improve code structure and readability through refactoring, comments, dockerization, reorganization of project structure, add logging.
+- **Code Refactor**: Improve code structure and readability through refactoring, comments, dockerization, reorganization of project structure, addition of unit tests, logging.
 - **Fine-Tuning Models**: Experiment with fine-tuning language models specifically on financial documents to improve performance.
 
 ### Explanation of Metrics
@@ -155,30 +203,18 @@ The code evaluates the performance of a system designed to answer questions usin
 ### Summary Statistics
 At the end of the evaluation, the code calculates and prints average scores for each metric across all evaluated items:
 - **Mean Correctness Score**: The average correctness score of the answers across all evaluated items.
+
 - **High Correctness Rate**: The proportion of answers that exceed the high correctness threshold.
+  
 - **Mean Retrieval Precision Score**: The average retrieval precision score across all items.
+  
 - **Mean Retrieval Recall Score**: The average retrieval recall score across all items.
+  
 - **Mean Reranker Precision Score**: The average reranker precision score across all items, along with the difference from the mean retrieval precision score.
+  
 - **Mean Reranker Recall Score**: The average reranker recall score across all items, along with the difference from the mean retrieval recall score.
 
 These metrics help evaluate both the retrieval effectiveness (how well relevant documents are retrieved) and the generation correctness (how accurately answers are generated based on those documents).
 
-
-## Observations
-
-### Context extraction experiment
-See
-- **Context Extraction**: Using a context extraction step resulted in a significant recall loss without sufficient gains in precision. **Decision:** Removed the context extraction step.
-- **Reranking Step**: The reranking step significantly reduces the amount of context while barely sacrificing recall, making it a valuable addition. **Decision:** Keeping the reranking step.
-
-#### Results
-Below are some results with an older version of the model on the first 100 samples from `train.json`. (Change is calculated relative to the previous step: retrieval -> reranker -> context extraction.)
-
-| Metric                               | Value (%) | Change (%)        |
-|--------------------------------------|-----------|-------------------|
-| Mean Retrieval Precision             | 2.58      | -                 |
-| Mean Retrieval Recall                | 31.15     | -                 |
-| Mean Reranking Precision             | 9.84      | +7.25             |
-| Mean Reranking Recall                | 29.51     | -1.64             |
-| Mean Context Extraction Precision    | 12.84     | +3.01             |
-| Mean Context Extraction Recall       | 19.67     | -9.84             |
+## Observability
+Langfuse was used to add an LLM observability platform, with experiment tracking. It was not necessary but I wanted to try it. See Langfuse documentation on how to use it. They have both free cloud and self-hosted offerings.

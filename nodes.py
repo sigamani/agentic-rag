@@ -115,6 +115,12 @@ def filter_context(state: AgentState, config: GraphConfig) -> AgentState:
 
 @observe()
 def rerank(state: AgentState, config: GraphConfig) -> AgentState:
+    if CHEATING_RETRIEVAL:
+        return {
+            "reranked_documents": state['documents'],
+            "context": format_docs(state['documents'])
+    } 
+    
     co = cohere.Client(os.getenv("COHERE_API_KEY"))
 
     docs = [
