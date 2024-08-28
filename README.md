@@ -128,7 +128,7 @@ This workflow is designed to take a user's question, generate relevant queries, 
 - **Table Parsing**: Experiment with Chain of Tables ([Google Chain of Table](https://github.com/google-research/chain-of-table)) or other methods for more effective table parsing.
 - **Optimization**: Run hyperparameter optimization for various parameters (e.g. k in retrieval)
 - **Dependency Management**: Remove unnecessary dependencies to streamline the environment.
-- **Code Refactor**: Improve code structure and readability through refactoring, dockerize, reorganize project structure, add logging.
+- **Code Refactor**: Improve code structure and readability through refactoring, comments, dockerization, reorganization of project structure, add logging.
 - **Fine-Tuning Models**: Experiment with fine-tuning language models specifically on financial documents to improve performance.
 
 ### Explanation of Metrics

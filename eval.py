@@ -23,6 +23,17 @@ dotenv.load_dotenv()
 dataset = langfuse.get_dataset(LANGFUSE_DATASET_NAME)
 HIGH_CORRECTNESS_THRESHOLD = 0.9
 
+def get_doc_selection_display(retrieved_doc_ids: list[str], expected_doc_id: str):
+    doc_selection_display = ""
+    for doc in retrieved_doc_ids:
+        if doc == expected_doc_id:
+            doc_selection_display += '+' + doc
+        else:
+            doc_selection_display += doc
+        doc_selection_display += ", "
+    if expected_doc_id not in retrieved_doc_ids:
+        doc_selection_display = '-' + doc
+
 def relative_score(a, b, power=2):
     """
     Relative difference between two numbers
@@ -77,12 +88,12 @@ def correctness_score(input, predicted, expected):
         expected_parsed_2 = float(expected.replace('%', '').replace("$", "").replace(",", "").replace(" ", ""))
         predicted_parsed = float(predicted.replace('%', 'e-2').replace("$", "").replace(",", "").replace(" ", ""))
         predicted_parsed_2 = float(predicted.replace('%', '').replace("$", "").replace(",", "").replace(" ", ""))
-        return max(
+        return abs(max(
             relative_score(predicted_parsed, expected_parsed),
             relative_score(predicted_parsed_2, expected_parsed_2),
             relative_score(predicted_parsed, expected_parsed_2),
             relative_score(predicted_parsed_2, expected_parsed),
-        )
+        ))
     except Exception:
         pass
 
@@ -97,7 +108,7 @@ def correctness_score(input, predicted, expected):
     except Exception:
         float_out = None # Error
         print(f"Error generating score (generated: {out_text})")
-    return float_out
+    return abs(float_out)
 
 def run_eval():
     answer_correctness_scores = []
@@ -159,13 +170,13 @@ def run_eval():
         print(f"Reranker Precision: {reranker_precision:.2%} ({reranker_precision - retrieval_precision:+.2%})")
         print(f"Reranker Recall: {reranker_recall:.2%} ({reranker_recall - retrieval_recall:+.2%})")
         print(f"Correctness: {correctness:.2%}") if correctness else print(f"Correctness: {correctness}")
-        print("-"*50)
 
         # Show generation for debugging, when retrieval was correct but answer was not
         if not correctness or ((correctness < .5) and (retrieval_recall > 0)):
             print(f"Generation: {generation}")
 
         print("-"*50)
+
         handler.trace.update(name="eval", 
                             input=question,
                             output=answer,
@@ -183,44 +194,36 @@ def run_eval():
         # add '+' prefix if the doc was the correct one
         # add no prefix if it was incorrect
         # if no correct docs identfied, add the correct one at the end with '-' prefix 
-        doc_selection_display = ""
-        for doc in retrieved_doc_ids:
-            if doc == expected_doc_id:
-                doc_selection_display += '+' + doc
-            else:
-                doc_selection_display += doc
-            doc_selection_display += ", "
-        if expected_doc_id not in retrieved_doc_ids:
-            doc_selection_display = '-' + doc
+        retrieval_doc_selection = get_doc_selection_display(retrieved_doc_ids=retrieved_doc_ids, expected_doc_id=expected_doc_id)
 
-        print(f"Document Selection: {doc_selection_display}")   
-        
         handler.trace.score(
             name="retrieval_precision",
             data_type="NUMERIC",
             value=retrieval_precision,
-            comment=doc_selection_display,
+            comment=retrieval_doc_selection,
         )
 
         handler.trace.score(
             name="retrieval_recall",
             data_type="BOOLEAN",
             value=retrieval_recall,
-            comment=doc_selection_display,
+            comment=retrieval_doc_selection,
         )
+
+        reranking_doc_selection = get_doc_selection_display(retrieved_doc_ids=retrieved_doc_ids, expected_doc_id=expected_doc_id)
 
         handler.trace.score(
             name="reranker_precision",
             data_type="NUMERIC",
             value=reranker_precision,
-            comment=doc_selection_display,
+            comment=reranking_doc_selection,
         )
 
         handler.trace.score(
             name="reranker_recall",
             data_type="BOOLEAN",
             value=reranker_recall,
-            comment=doc_selection_display,
+            comment=reranking_doc_selection,
         )
 
         answer_correctness_scores.append(correctness)
