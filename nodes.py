@@ -1,16 +1,14 @@
-import csv
-from datetime import datetime
 import os
 import re
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.documents import Document
-from config import DATA_PATH
+from config import DATA_PATH, CHEATING_RETRIEVAL, DISABLE_GENERATION
+from graph import GraphConfig
 from prompts import (reason_and_answer_prompt_template, 
                      extract_anwer_prompt_template, 
                      filter_context_prompt_template, 
                      generate_queries_prompt_template)
 from state import AgentState
-import xmltodict
 
 from retrieve import RelevantDocumentRetriever, vector_store
 from llm import llm, MODEL_NAME
@@ -26,9 +24,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 dotenv.load_dotenv()
 
 cheating_retriever = RelevantDocumentRetriever(DATA_PATH)
-CHEATING_RETRIEVAL = False
-DISABLE_GENERATION = False
-MAX_TOKENS = 4096
 
 
 @observe()
@@ -39,11 +34,11 @@ def extract_question(state: AgentState) -> AgentState:
 
 
 @observe()
-def retrieve(state: AgentState) -> AgentState:
+def retrieve(state: AgentState, config: GraphConfig) -> AgentState:
     if CHEATING_RETRIEVAL:
         return retrieve_relevant_only(state)
     else:
-        return retrieve_from_vector_db(state)
+        return retrieve_from_vector_db(state, config)
 
 
 @observe()
@@ -54,7 +49,7 @@ def retrieve_relevant_only(state: AgentState) -> AgentState:
 
 
 @observe()
-def retrieve_from_vector_db(state: AgentState) -> AgentState:
+def retrieve_from_vector_db(state: AgentState, config: GraphConfig) -> AgentState:
     queries = state["queries"]
     
     results = []
@@ -62,7 +57,7 @@ def retrieve_from_vector_db(state: AgentState) -> AgentState:
 
     # Function to search and return results for a query
     def search_query(query):
-        return vector_store.similarity_search(query, k=5)
+        return vector_store.similarity_search(query, k=config.get("retrieval_k", 5))
     
     # Parallelize the search across queries
     with ThreadPoolExecutor() as executor:
@@ -82,10 +77,10 @@ def retrieve_from_vector_db(state: AgentState) -> AgentState:
     }
 
 
-def generate_queries(state: AgentState) -> AgentState:
+def generate_queries(state: AgentState, config: GraphConfig) -> AgentState:
     question = state["question"]
     prompt = generate_queries_prompt_template.format(question=question)
-    response = llm.completions.create(prompt=format_prompt(prompt), model=MODEL_NAME, max_tokens=MAX_TOKENS, temperature=0)
+    response = llm.completions.create(prompt=format_prompt(prompt), model=MODEL_NAME, max_tokens=config.get("max_tokens", 4096), temperature=0)
 
     queries = response.choices[0].text.split('\n') 
     queries.append(question) # add original question
@@ -96,12 +91,12 @@ def generate_queries(state: AgentState) -> AgentState:
 
 
 @observe()
-def filter_context(state: AgentState) -> AgentState:
+def filter_context(state: AgentState, config: GraphConfig) -> AgentState:
     question = state["question"]
     documents = state["reranked_documents"]
     
     prompt = filter_context_prompt_template.format(question=question, documents=format_docs(documents))
-    response = llm.completions.create(prompt=format_prompt(prompt), model=MODEL_NAME, max_tokens=MAX_TOKENS, temperature=0)        
+    response = llm.completions.create(prompt=format_prompt(prompt), model=MODEL_NAME, max_tokens=config.get("max_tokens", 4096), temperature=0)        
     response_text = response.choices[0].text.replace("<OUTPUT>","").replace("</OUTPUT>","")
 
     try:
@@ -120,7 +115,7 @@ def filter_context(state: AgentState) -> AgentState:
     }
 
 @observe()
-def rerank(state: AgentState) -> AgentState:
+def rerank(state: AgentState, config: GraphConfig) -> AgentState:
     co = cohere.Client(os.getenv("COHERE_API_KEY"))
 
     docs = [
@@ -131,7 +126,7 @@ def rerank(state: AgentState) -> AgentState:
         model="rerank-english-v3.0",
         query=state["question"],
         documents=docs,
-        top_n=3,
+        top_n=config.get("rerank_k", 3),
     )
 
     reranked_docs = [
@@ -151,7 +146,7 @@ def format_docs(docs: list[Document]) -> str:
     return formatted
 
 @observe()
-def generate(state: AgentState) -> AgentState:
+def generate(state: AgentState, config: GraphConfig) -> AgentState:
     question = state["question"]
     context = state["context"]
 
@@ -166,9 +161,9 @@ def generate(state: AgentState) -> AgentState:
         response = llm.completions.create(
             model=MODEL_NAME,
             prompt=format_prompt(prompt),
-            max_tokens=MAX_TOKENS,
-            temperature=0,
-            top_p=0.5,
+            max_tokens=config.get("max_tokens", 4096),
+            temperature=config.get("temperature", 0.0),
+            top_p=config.get("top_p", 0.9),
         )
         response_message = AIMessage(response.choices[0].text)
 

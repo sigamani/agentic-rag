@@ -1,6 +1,7 @@
 import json
-from retrieve import COLLECTION_NAME, chromadb_client, sentence_transformer_ef
+from retrieve import chromadb_client, sentence_transformer_ef
 from utils import format_document
+from config import DATA_PATH, DATA_LIMIT, COLLECTION_NAME
 
 def parse_convfinqa_dataset(filepath, limit: int = None):
     with open(filepath, 'r') as f:
@@ -25,8 +26,7 @@ except ValueError:
 
 db = chromadb_client.create_collection(name=COLLECTION_NAME, embedding_function=sentence_transformer_ef)
 
-DATA_PATH = 'ConvFinQA/data/train.json'
-docs = parse_convfinqa_dataset(DATA_PATH, limit=1000)
+docs = parse_convfinqa_dataset(DATA_PATH, limit=DATA_LIMIT)
 ids = [doc.id for doc in docs]
 texts = [doc.page_content for doc in docs]
 metadatas = [doc.metadata for doc in docs]

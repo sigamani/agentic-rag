@@ -1,3 +1,4 @@
+from config import DATA_LIMIT
 from langfuse_config import langfuse
 from llm import llm
 from graph import graph
@@ -12,13 +13,14 @@ import csv
 import pandas as pd
 from nodes import CHEATING_RETRIEVAL, DISABLE_GENERATION
 from prompts import eval_prompt_template
+from config import LANGFUSE_DATASET_NAME
 
 from tqdm.auto import tqdm
 
 dotenv.load_dotenv()
 
 
-dataset = langfuse.get_dataset("convfinqa-train")
+dataset = langfuse.get_dataset(LANGFUSE_DATASET_NAME)
 HIGH_CORRECTNESS_THRESHOLD = 0.9
 
 def relative_score(a, b, power=2):
@@ -106,7 +108,7 @@ def run_eval():
     out = []
 
     run_name = f"{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    for item in tqdm(dataset.items[:1000]):
+    for item in tqdm(dataset.items[:DATA_LIMIT]):
         handler = item.get_langchain_handler(
             run_name=run_name,
             run_description="RAG evaluation with ground-truth documents",

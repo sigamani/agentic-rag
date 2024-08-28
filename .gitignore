@@ -3,3 +3,5 @@ ConvFinQA
 *.pyc
 .env
 vector_database
+*.csv
+*.gguf

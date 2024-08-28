@@ -1,4 +1,5 @@
 from collections import defaultdict
+from config import COLLECTION_NAME, DB_PATH, EMBEDDING_MODEL
 from utils import format_document
 
 import json
@@ -7,9 +8,6 @@ from chromadb.utils import embedding_functions
 from langchain_chroma import Chroma
 from sentence_transformers import SentenceTransformer
 from langchain_core.documents import Document
-
-COLLECTION_NAME = "financial_docs"
-EMBEDDING_MODEL = "multi-qa-mpnet-base-dot-v1"
 
 
 # Langchain compatible embeddings
@@ -22,9 +20,6 @@ class CustomEmbeddings:
 
     def embed_query(self, query: str) -> list[float]:
         return self.model.encode([query])[0].tolist()
-
-
-DB_PATH = "./vector_database"
 
 # ChromaDB setup
 sentence_transformer_ef = embedding_functions.SentenceTransformerEmbeddingFunction(

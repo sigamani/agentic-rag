@@ -1,13 +1,7 @@
-import json
-import os
-import re
-from typing import Literal, TypedDict, Annotated, Sequence
-from langchain_chroma import Chroma
-from langgraph.graph import StateGraph, END
+from langgraph.graph import StateGraph
 from langchain_core.messages import HumanMessage
-from langchain.prompts import PromptTemplate
-from operator import add
 import dotenv
+from config import GraphConfig
 
 from nodes import (
     extract_question,
@@ -16,17 +10,12 @@ from nodes import (
     retrieve,
     rerank,
     generate_queries,
-    filter_context,
 )
 from state import AgentState
 
-from langfuse_config import langfuse, langfuse_handler
+from langfuse_config import langfuse_handler
 
 dotenv.load_dotenv()
-
-
-class GraphConfig(TypedDict):
-    retrieval_k: int = 5
 
 
 def answer_exists(state: AgentState) -> AgentState:

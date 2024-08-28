@@ -2,6 +2,7 @@ import json
 from langchain_core.documents import Document
 from tqdm.auto import tqdm
 from langfuse_config import langfuse
+from config import DATA_PATH, DATA_LIMIT, LANGFUSE_DATASET_NAME
 
 def create_convfinqa_langfuse_dataset(filepath, name, description, limit: int = None) -> list[Document]:
     langfuse.create_dataset(name=name, description=description)
@@ -14,8 +15,6 @@ def create_convfinqa_langfuse_dataset(filepath, name, description, limit: int = 
         data = data[:limit]
 
     for entry in tqdm(data):
-        # Combine pre_text, post_text, and table content into a single text block
-
         # Loop through every available QA field in the entry
         for qa_field in set(QA_FIELDS).intersection(entry.keys()):
             # Upload to Langfuse
@@ -30,7 +29,6 @@ def create_convfinqa_langfuse_dataset(filepath, name, description, limit: int = 
                 }
             )
 
-DATA_PATH = 'ConvFinQA/data/train.json'
-create_convfinqa_langfuse_dataset(DATA_PATH, "convfinqa-train", "Dataset created from ConvFinQA train data", limit=1000)
+create_convfinqa_langfuse_dataset(DATA_PATH, LANGFUSE_DATASET_NAME, "Dataset created from ConvFinQA train data", limit=DATA_LIMIT)
 
 
