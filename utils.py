@@ -1,4 +1,7 @@
+from typing import TypedDict
 from langchain_core.documents import Document
+
+from config import GraphConfig
 
 
 def format_document(entry: dict) -> Document:
@@ -51,3 +54,6 @@ def format_prompt(user_query: str):
     """
     template = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nYou are a helpful assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"""
     return template.format(user_query)
+
+def typed_dict_to_dict(x) -> dict:
+    return {k: v for k, v in x.__dict__.items() if not k.startswith('__')}

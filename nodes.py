@@ -26,7 +26,7 @@ cheating_retriever = RelevantDocumentRetriever(DATA_PATH)
 
 
 @observe()
-def extract_question(state: AgentState) -> AgentState:
+def extract_question(state: AgentState, config: GraphConfig) -> AgentState:
     messages = state["messages"]
     question = messages[-1].content
     return {"question": question}
@@ -56,7 +56,7 @@ def retrieve_from_vector_db(state: AgentState, config: GraphConfig) -> AgentStat
 
     # Function to search and return results for a query
     def search_query(query):
-        return vector_store.similarity_search(query, k=config.get("retrieval_k", 5))
+        return vector_store.similarity_search(query, k=config["configurable"].get("retrieval_k", 5))
     
     # Parallelize the search across queries
     with ThreadPoolExecutor() as executor:
@@ -79,7 +79,7 @@ def retrieve_from_vector_db(state: AgentState, config: GraphConfig) -> AgentStat
 def generate_queries(state: AgentState, config: GraphConfig) -> AgentState:
     question = state["question"]
     prompt = generate_queries_prompt_template.format(question=question)
-    response = llm.completions.create(prompt=format_prompt(prompt), model=MODEL_NAME, max_tokens=config.get("max_tokens", 4096), temperature=0)
+    response = llm.completions.create(prompt=format_prompt(prompt), model=MODEL_NAME, max_tokens=config["configurable"].get("max_tokens", 4096), temperature=0)
 
     queries = response.choices[0].text.split('\n') 
     queries.append(question) # add original question
@@ -95,7 +95,7 @@ def filter_context(state: AgentState, config: GraphConfig) -> AgentState:
     documents = state["reranked_documents"]
     
     prompt = filter_context_prompt_template.format(question=question, documents=format_docs(documents))
-    response = llm.completions.create(prompt=format_prompt(prompt), model=MODEL_NAME, max_tokens=config.get("max_tokens", 4096), temperature=0)        
+    response = llm.completions.create(prompt=format_prompt(prompt), model=MODEL_NAME, max_tokens=config["configurable"].get("max_tokens", 4096), temperature=0)        
     response_text = response.choices[0].text.replace("<OUTPUT>","").replace("</OUTPUT>","")
 
     try:
@@ -131,7 +131,7 @@ def rerank(state: AgentState, config: GraphConfig) -> AgentState:
         model="rerank-english-v3.0",
         query=state["question"],
         documents=docs,
-        top_n=config.get("rerank_k", 3),
+        top_n=config["configurable"].get("rerank_k", 3),
     )
 
     reranked_docs = [
@@ -166,9 +166,9 @@ def generate(state: AgentState, config: GraphConfig) -> AgentState:
         response = llm.completions.create(
             model=MODEL_NAME,
             prompt=format_prompt(prompt),
-            max_tokens=config.get("max_tokens", 4096),
-            temperature=config.get("temperature", 0.0),
-            top_p=config.get("top_p", 0.9),
+            max_tokens=config["configurable"].get("max_tokens", 4096),
+            temperature=config["configurable"].get("temperature", 0.0),
+            top_p=config["configurable"].get("top_p", 0.9),
         )
         response_message = AIMessage(response.choices[0].text)
 

@@ -14,6 +14,7 @@ from nodes import (
 from state import AgentState
 
 from langfuse_config import langfuse_handler
+from utils import typed_dict_to_dict
 
 dotenv.load_dotenv()
 
@@ -22,6 +23,7 @@ def answer_exists(state: AgentState) -> AgentState:
     return state["answer"]
 
 
+# Workflow
 workflow = StateGraph(AgentState, config_schema=GraphConfig)
 
 # Nodes
@@ -58,7 +60,10 @@ if __name__ == "__main__":
         ]
     }
 
-    for output in graph.stream(inputs, config={"callbacks": [langfuse_handler]}):
+    for output in graph.stream(inputs, config={"callbacks": [langfuse_handler], 
+                                               "configurable": 
+                                                   typed_dict_to_dict(GraphConfig)
+                                               }):
         for key, value in output.items():
             print(f"Output from node '{key}':")
             print("---")

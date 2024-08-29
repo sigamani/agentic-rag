@@ -1,9 +1,10 @@
+from typing import Optional
 from config import DATA_LIMIT_EVAL
 from langfuse_config import langfuse
 from llm import llm
 from graph import graph
 import dotenv
-from utils import format_prompt
+from utils import format_prompt, typed_dict_to_dict
 from langchain_core.messages import HumanMessage
 from llm import MODEL_NAME
 
@@ -13,7 +14,7 @@ import csv
 import pandas as pd
 from nodes import CHEATING_RETRIEVAL, DISABLE_GENERATION
 from prompts import eval_prompt_template
-from config import LANGFUSE_DATASET_NAME
+from config import GraphConfig, LANGFUSE_DATASET_NAME
 
 from tqdm.auto import tqdm
 import time
@@ -24,7 +25,7 @@ dotenv.load_dotenv()
 dataset = langfuse.get_dataset(LANGFUSE_DATASET_NAME)
 HIGH_CORRECTNESS_THRESHOLD = 0.9
 
-def get_doc_selection_display(retrieved_doc_ids: list[str], expected_doc_id: str):
+def get_doc_selection_display(retrieved_doc_ids: list[str], expected_doc_id: str) -> str:
     doc_selection_display = ""
     for doc in retrieved_doc_ids:
         if doc == expected_doc_id:
@@ -34,8 +35,9 @@ def get_doc_selection_display(retrieved_doc_ids: list[str], expected_doc_id: str
         doc_selection_display += ", "
     if expected_doc_id not in retrieved_doc_ids:
         doc_selection_display = '-' + doc
+    return doc_selection_display
 
-def relative_score(a, b, power=2):
+def relative_score(a, b, power=2) -> float:
     """
     Relative difference between two numbers
     
@@ -68,7 +70,7 @@ def retrieval_recall_score(predicted: list[str], expected: str) -> float:
     return float(expected in predicted)
 
 
-def correctness_score(input, predicted, expected):
+def correctness_score(input: str, predicted: str, expected: str) -> Optional[float]:
     if DISABLE_GENERATION:
         return None
     
@@ -135,7 +137,7 @@ def run_eval():
         }
 
         start = time.time()
-        output = graph.invoke(inputs, config={"callbacks": [handler]})
+        output = graph.invoke(inputs, config={"callbacks": [handler], "configurable": typed_dict_to_dict(GraphConfig)})
         latency = time.time() - start
         latencies.append(latency)
         
