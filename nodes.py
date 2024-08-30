@@ -11,7 +11,6 @@ from state import AgentState
 
 from retrieve import RelevantDocumentRetriever, vector_store
 from llm import llm, MODEL_NAME
-from langfuse.decorators import observe
 
 import dotenv
 
