@@ -1,5 +1,5 @@
 # Ollama
-from openai import OpenAI
+from langfuse.openai import OpenAI
 import os
 import dotenv
 
