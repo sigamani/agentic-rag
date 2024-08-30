@@ -25,14 +25,12 @@ dotenv.load_dotenv()
 cheating_retriever = RelevantDocumentRetriever(DATA_PATH)
 
 
-@observe()
 def extract_question(state: AgentState, config: GraphConfig) -> AgentState:
     messages = state["messages"]
     question = messages[-1].content
     return {"question": question}
 
 
-@observe()
 def retrieve(state: AgentState, config: GraphConfig) -> AgentState:
     if CHEATING_RETRIEVAL:
         return retrieve_relevant_only(state)
@@ -40,14 +38,12 @@ def retrieve(state: AgentState, config: GraphConfig) -> AgentState:
         return retrieve_from_vector_db(state, config)
 
 
-@observe()
 def retrieve_relevant_only(state: AgentState) -> AgentState:
     question = state["question"]
     return {"documents": cheating_retriever.query(question)}
 
 
 
-@observe()
 def retrieve_from_vector_db(state: AgentState, config: GraphConfig) -> AgentState:
     queries = state["queries"]
     
@@ -89,7 +85,6 @@ def generate_queries(state: AgentState, config: GraphConfig) -> AgentState:
     }
 
 
-@observe()
 def filter_context(state: AgentState, config: GraphConfig) -> AgentState:
     question = state["question"]
     documents = state["reranked_documents"]
@@ -113,7 +108,6 @@ def filter_context(state: AgentState, config: GraphConfig) -> AgentState:
         "sources": sources
     }
 
-@observe()
 def rerank(state: AgentState, config: GraphConfig) -> AgentState:
     if CHEATING_RETRIEVAL:
         return {
@@ -150,7 +144,6 @@ def format_docs(docs: list[Document]) -> str:
         formatted += f"<DOC ID={doc.metadata['id']}>\n{doc.page_content}\n</DOC>"
     return formatted
 
-@observe()
 def generate(state: AgentState, config: GraphConfig) -> AgentState:
     question = state["question"]
     context = state["context"]
@@ -178,7 +171,6 @@ def generate(state: AgentState, config: GraphConfig) -> AgentState:
     }
 
 
-@observe()
 def generate_chat(state: AgentState) -> AgentState:
     messages = state["messages"]
     question = state["question"]
@@ -207,7 +199,6 @@ def generate_chat(state: AgentState) -> AgentState:
     }
 
 
-@observe()
 def extract_answer(state: AgentState) -> AgentState:
     if DISABLE_GENERATION:
         return {"answer": "NO ANSWER"}
