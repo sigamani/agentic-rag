@@ -7,10 +7,9 @@ from langchain_community import embeddings
 from langchain_core.runnables.passthrough import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
+import os
 
 local_llama = ChatOllama(model="mistral")
-OPENAI_API_KEY = "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"
-
 
 def rag(chunks, collection_name):
     vectorstore = Chroma.from_documents(
@@ -110,7 +109,6 @@ documents = text_splitter.create_documents([text])
 # 6. Agentic Chunking
 print("### Agentic Chunking ###")
 
-from langchain_openai import ChatOpenAI
 from typing import Optional, List
 from pydantic import BaseModel, Field
 from langchain import hub
