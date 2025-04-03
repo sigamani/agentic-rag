@@ -31,19 +31,19 @@ pip install -r requirements.txt
 You can run a semantic RAG query like this:
 
 ```bash
-python run_agent2.py --query "I’m having trouble with a Model 18 ADA dishwasher. It’s showing an error code E4 and the customer is complaining is it not draining"
+python run_agent.py --query "I’m having trouble with a Model 18 ADA dishwasher. It’s showing an error code E4 and the customer is complaining is it not draining"
 ```
 
 You can also provide prior context to simulate a running conversation:
 
 ```bash
-python run_agent2.py --query "It’s showing an error code E4 and isn’t draining." \
+python run_agent.py --query "It’s showing an error code E4 and isn’t draining." \
 --history "Technician: I’m having trouble with a Model 18 ADA dishwasher.\nAI Assistant: Error code E4 can indicate drainage issue. Let’s start by checking the drain hose for kinks or blockages. Have you inspected the hose?\nTechnician: Yes, I’ve checked it and there doesn’t seem to be any physical obstruction."
 ```
 
 ## 📁 Folder Structure
 
-- `run_agent2.py` — main entry point for your assistant
+- `run_agent.py` — main entry point for your assistant
 - `data/content.txt` — the reference manual used for retrieval
 - `utils/agentic_chunker.py` — utility for custom chunking (if used)
 
