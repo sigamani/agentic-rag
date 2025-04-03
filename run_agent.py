@@ -21,7 +21,7 @@ def rag(chunks, collection_name):
     retriever = vectorstore.as_retriever()
 
     prompt_template = """
-    Answer the question based only on the followeing context:
+    Answer the question based only on the following context:
     {context} 
     Question: {question}
     """
