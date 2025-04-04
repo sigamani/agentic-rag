@@ -39,7 +39,7 @@ jobs:
       - name: Check formatting with black
         run: |
           echo "Checking formatting with black..."
-          black . --check
+          black . --line-length 79 --check 
           
       - name: Run agent and capture response
         id: run_agent
