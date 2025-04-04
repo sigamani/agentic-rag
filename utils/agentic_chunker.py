@@ -30,7 +30,9 @@ class AgenticChunker:
             )
 
         self.llm = ChatOpenAI(
-            model="gpt-4-1106-preview", openai_api_key=openai_api_key, temperature=0
+            model="gpt-4-1106-preview",
+            openai_api_key=openai_api_key,
+            temperature=0,
         )
 
     def add_propositions(self, propositions):
@@ -198,7 +200,9 @@ class AgenticChunker:
 
         runnable = PROMPT | self.llm
 
-        new_chunk_summary = runnable.invoke({"proposition": proposition}).content
+        new_chunk_summary = runnable.invoke(
+            {"proposition": proposition}
+        ).content
 
         return new_chunk_summary
 
@@ -313,7 +317,10 @@ class AgenticChunker:
         runnable = PROMPT | self.llm
 
         chunk_found = runnable.invoke(
-            {"proposition": proposition, "current_chunk_outline": current_chunk_outline}
+            {
+                "proposition": proposition,
+                "current_chunk_outline": current_chunk_outline,
+            }
         ).content
 
         class Sentences(BaseModel):
