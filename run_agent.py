@@ -1,29 +1,33 @@
 import os
-import argparse
+import logging
+import time
 from PyPDF2 import PdfReader
 from rich import print
 from langchain_core.runnables import RunnableLambda
-from langchain_community.docstore.document import Document
 from langchain_community.vectorstores import Chroma
-from langchain_ollama import OllamaEmbeddings
-from langchain_ollama import ChatOllama
-from langchain_core.runnables.passthrough import RunnablePassthrough
+from langchain_ollama import OllamaEmbeddings, ChatOllama
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_experimental.text_splitter import SemanticChunker
 
-# Constants
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.FileHandler("rag_chat.log"), logging.StreamHandler()],
+)
+
 OLLAMA_MODEL = "mistral"
 EMBED_MODEL = "nomic-embed-text"
 COLLECTION_NAME = "semantic-chunks"
 CONTENT_FILE = "data/content.pdf"
 
-# === Initialise LLM === #
+print("[yellow]⏳ Initialising local model...[/yellow]")
+logging.info("Loading ChatOllama model")
 local_llama = ChatOllama(model=OLLAMA_MODEL)
+print("[green]✅ Model loaded[/green]")
 
 
 class ConversationMemory:
-    # === Simple Memory Demo === #
     def __init__(self):
         self.history = []
 
@@ -33,40 +37,42 @@ class ConversationMemory:
     def get_history(self):
         return "\n".join(self.history)
 
-    def format_history(self):
-        return "\n".join([f"{msg['role']}: {msg['content']}" for msg in self.history])
-
 
 def build_rag_chain(documents):
-    # === RAG Chain === #
+    print("[yellow]📦 Creating vector store and retriever...[/yellow]")
+    logging.info("Building Chroma vectorstore with semantic chunks")
+
     vectorstore = Chroma.from_documents(
         documents=documents,
-        collection_name="semantic-chunks",
+        collection_name=COLLECTION_NAME,
         embedding=OllamaEmbeddings(model=EMBED_MODEL),
     )
-
     retriever = vectorstore.as_retriever()
 
     prompt_template = ChatPromptTemplate.from_template(
-        """
-    You are an AI assistant helping a tehcnician troubleshoot appliances.
-    Use the following context and conversation history to answer the current question.
-    Your answer should summarise your findings in more more than 20 tokens.
+        # Control verbosity through the prompt instead of modifying ChatOllama
+        # globally, to avoid limiting output length across all completions.
+        """ You are an AI assistant helping a technician troubleshoot
+        appliances. Use the context and conversation history to
+        answer the technician's question.
+        Your response must be a single sentence, clear and specific.
+        Your response must be no more than 30 tokens.
 
-    Context:
-    {context}
+        Context:
+        {context}
 
-    Conversation history:
-    {conversation}
+        Conversation history:
+        {conversation}
 
-    Technician: {question}
-    AI Assistant:
-    """
+        Technician: {question}
+        AI Assistant:"""
     )
 
-    chain = (
+    return (
         {
-            "context": RunnableLambda(lambda x: retriever.invoke(x["question"])),
+            "context": RunnableLambda(
+                lambda x: retriever.invoke(x["question"])
+            ),
             "conversation": lambda x: x["conversation"],
             "question": lambda x: x["question"],
         }
@@ -75,63 +81,61 @@ def build_rag_chain(documents):
         | StrOutputParser()
     )
 
-    return chain
-
-
-def semantic_chunk_text(text):
-    text_splitter = SemanticChunker(
-        OllamaEmbeddings(model=EMBED_MODEL), breakpoint_threshold_type="percentile"
-    )
-    return text_splitter.create_documents([text])
-
 
 def load_and_chunk_documents():
     if not os.path.exists(CONTENT_FILE):
-        raise FileNotFoundError(f"Could not find file: {filepath}")
+        raise FileNotFoundError(f"Could not find file: {CONTENT_FILE}")
+
+    print(f"[yellow]📖 Reading PDF content from {CONTENT_FILE}...[/yellow]")
+    logging.info("Loading and parsing PDF")
+
     pdfdoc = PdfReader(CONTENT_FILE)
-    raw_text = ""
-    for i, pages in enumerate(pdfdoc.pages):
-        text = pages.extract_text()
-        raw_text += text
+    raw_text = "".join([page.extract_text() or "" for page in pdfdoc.pages])
 
-    text_splitter = SemanticChunker(OllamaEmbeddings(model="nomic-embed-text"))
-    return text_splitter.create_documents([raw_text])
-    return raw_text
+    print("[yellow]🧠 Performing semantic chunking...[/yellow]")
+    logging.info("Chunking document using SemanticChunker")
 
+    text_splitter = SemanticChunker(OllamaEmbeddings(model=EMBED_MODEL))
+    documents = text_splitter.create_documents([raw_text])
 
-memory = """
-Technician: I’m having trouble with a Model 18 ADA dishwasher. It’s showing an error code E4 and the customer is complaining is it not draining
-AI Assistant: Error code E4 can indicate drainage issue. Let’s start by checking the drain hose for kinks or blockages. Have you inspected the hose?
-Technician: Yes, I’ve checked it and there doesn’t seem to be any physical obstruction.
-AI Assistant: Alright, next step is to check the drain pump. Please ensure the dishwasher is turned off and unplugged before proceeding. Can you access the drain pump?
-"""
+    print(f"[green]✅ Loaded and chunked {len(documents)} documents[/green]")
+    return documents
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Semantic Search CLI using LangChain")
-    parser.add_argument(
-        "--query", type=str, required=True, help="Technician's question"
-    )
+    print("[bold green]💬 Agentic RAG Chat Interface[/bold green]")
+    print("[dim]Type 'exit' to quit.[/dim]\n")
 
-    args = parser.parse_args()
     memory = ConversationMemory()
-    query = args.query
-
     documents = load_and_chunk_documents()
     chain = build_rag_chain(documents)
 
-    conversation_input = {
-        "question": query,
-        "conversation": memory,
-    }
+    while True:
+        query = input("[bold cyan]Technician:[/bold cyan] ").strip()
+        if query.lower() in ["exit", "quit"]:
+            print("[italic]👋 Goodbye![/italic]")
+            break
 
-    # print(f"conversation input: {conversation_input}")
-    response = chain.invoke(conversation_input)
-    print(f"response: {response}")
-    memory.add_turn("Technician", query)
-    memory.add_turn("AI Assistant", response)
-    # memory.format_history()
-    memory.get_history()
+        memory.add_turn("Technician", query)
+        conversation_input = {
+            "question": query,
+            "conversation": memory.get_history(),
+        }
+
+        print("[yellow]🧠 Thinking...[/yellow]")
+        start = time.time()
+        try:
+            response = chain.invoke(conversation_input)
+        except Exception as e:
+            logging.error("Inference error: %s", str(e))
+            print(f"[red]❌ Error: {e}[/red]")
+            continue
+        end = time.time()
+
+        print(f"[bold magenta]AI Assistant:[/bold magenta] {response}\n")
+        print(f"[dim]⏱️ Response time: {end - start:.2f}s[/dim]")
+
+        memory.add_turn("AI Assistant", response)
 
 
 if __name__ == "__main__":
