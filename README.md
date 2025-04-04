@@ -1,6 +1,6 @@
-# Agentic RAG
+# Agentic RAG Strategy for Troubleshooting Assistant
 
-This repository contains a modular Retrieval-Augmented Generation (RAG) pipeline using LangChain, Ollama embeddings, and Mistral for answering technical queries in the context of appliance troubleshooting.
+This document outlines the strategy for implementing a context-aware, low-latency, accurate Retrieval-Augmented Generation (RAG) assistant for technical troubleshooting. The solution leverages local LLM inference, Ray-distributed chunking, LangSmith evaluation, and Weights & Biases observability.
 
 ## 🔧 Installation
 
