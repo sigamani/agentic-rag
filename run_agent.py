@@ -70,9 +70,7 @@ def build_rag_chain(documents):
 
     return (
         {
-            "context": RunnableLambda(
-                lambda x: retriever.invoke(x["question"])
-            ),
+            "context": RunnableLambda(lambda x: retriever.invoke(x["question"])),
             "conversation": lambda x: x["conversation"],
             "question": lambda x: x["question"],
         }
