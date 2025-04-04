@@ -25,7 +25,7 @@ CONTENT_FILE = "data/content.pdf"
 TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
 
 if not TEST_MODE:
-    local_llama = ChatOllama(model=OLLAMA_MODEL)
+    local_llama = ChatOllama(model=OLLAMA_MODEL, max_tokens=30)
 else:
     from langchain_core.runnables import Runnable
 
@@ -68,7 +68,6 @@ def build_rag_chain(documents):
         appliances. Use the context and conversation history to
         answer the technician's question.
         Your response must be a single sentence, clear and specific.
-        Your response must be no more than 30 tokens.
 
         Context:
         {context}
