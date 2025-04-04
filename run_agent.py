@@ -10,14 +10,6 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_experimental.text_splitter import SemanticChunker
 
-TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
-
-if not TEST_MODE:
-    local_llama = ChatOllama(model=OLLAMA_MODEL)
-    else:
-        from langchain_core.runnables import Runnable
-            local_llama = Runnable(lambda x: "Test response from mock model.")
-
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,6 +21,16 @@ OLLAMA_MODEL = "mistral"
 EMBED_MODEL = "nomic-embed-text"
 COLLECTION_NAME = "semantic-chunks"
 CONTENT_FILE = "data/content.pdf"
+
+TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
+
+if not TEST_MODE:
+    local_llama = ChatOllama(model=OLLAMA_MODEL)
+else:
+    from langchain_core.runnables import Runnable
+
+    local_llama = Runnable(lambda x: "Test response from mock model.")
+
 
 print("[yellow]⏳ Initialising local model...[/yellow]")
 logging.info("Loading ChatOllama model")
