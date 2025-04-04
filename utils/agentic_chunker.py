@@ -200,9 +200,7 @@ class AgenticChunker:
 
         runnable = PROMPT | self.llm
 
-        new_chunk_summary = runnable.invoke(
-            {"proposition": proposition}
-        ).content
+        new_chunk_summary = runnable.invoke({"proposition": proposition}).content
 
         return new_chunk_summary
 
