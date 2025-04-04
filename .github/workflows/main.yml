@@ -31,16 +31,14 @@ jobs:
           pip install -r requirements.txt
           pip install black flake8
 
+      - name: Format with Black
+        run: black . --line-length 79
+        
       - name: Run flake8 linting
         run: |
           echo "Running flake8 lint check..."
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-
-      - name: Check formatting with black
-        run: |
-          echo "Checking formatting with black..."
-          black . --line-length 79 --check 
-          
+              
       - name: Run agent and capture response
         id: run_agent
         run: |
