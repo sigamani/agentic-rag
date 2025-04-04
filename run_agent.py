@@ -83,10 +83,10 @@ def semantic_chunk_text(text):
     return text_splitter.create_documents([text])
 
 
-def load_and_chunk_documents(filepath):
-    if not os.path.exists(filepath):
+def load_and_chunk_documents():
+    if not os.path.exists(CONTENT_FILE):
         raise FileNotFoundError(f"Could not find file: {filepath}")
-    pdfdoc = PdfReader(filepath)
+    pdfdoc = PdfReader(CONTENT_FILE)
     raw_text = ""
     for i, pages in enumerate(pdfdoc.pages):
         text = pages.extract_text()
@@ -123,7 +123,7 @@ def main():
         "conversation": memory,
     }
 
-    print(f"conversation input: {conversation_input}")
+    #print(f"conversation input: {conversation_input}")
     response = chain.invoke(conversation_input)
     print(f"response: {response}")
     memory.add_turn("Technician", query)
