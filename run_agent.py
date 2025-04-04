@@ -1,5 +1,6 @@
 import os
 import argparse
+from PyPDF2 import PdfReader
 from rich import print
 from langchain_core.runnables import RunnableLambda
 from langchain_community.docstore.document import Document
@@ -15,7 +16,7 @@ from langchain_experimental.text_splitter import SemanticChunker
 OLLAMA_MODEL = "mistral"
 EMBED_MODEL = "nomic-embed-text"
 COLLECTION_NAME = "semantic-chunks"
-CONTENT_PATH = "data/content.txt"
+CONTENT_FILE = "data/content.pdf"
 
 # === Initialise LLM === #
 local_llama = ChatOllama(model=OLLAMA_MODEL)
@@ -75,13 +76,25 @@ def build_rag_chain(documents):
     return chain
 
 
-
-def load_and_chunk_documents():
-    from langchain_experimental.text_splitter import SemanticChunker
-    with open("data/content.txt", "r", encoding="utf-8") as file:
-        text = file.read()
-    text_splitter = SemanticChunker(OllamaEmbeddings(model="nomic-embed-text"))
+def semantic_chunk_text(text):
+    text_splitter = SemanticChunker(
+        OllamaEmbeddings(model=EMBED_MODEL), breakpoint_threshold_type="percentile"
+    )
     return text_splitter.create_documents([text])
+
+
+def load_and_chunk_documents(filepath):
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Could not find file: {filepath}")
+    pdfdoc = PdfReader(filepath)
+    raw_text = ""
+    for i, pages in enumerate(pdfdoc.pages):
+        text = pages.extract_text()
+        raw_text += text   
+    
+    text_splitter = SemanticChunker(OllamaEmbeddings(model="nomic-embed-text"))
+    return text_splitter.create_documents([raw_text])    
+    return raw_text
 
 
 memory = """
