@@ -1,5 +1,6 @@
 import os
 import argparse
+from PyPDF2 import PdfReader
 from rich import print
 from langchain_community.docstore.document import Document
 from langchain_community.chat_models import ChatOllama
@@ -14,7 +15,7 @@ from langchain_experimental.text_splitter import SemanticChunker
 OLLAMA_MODEL = "mistral"
 EMBED_MODEL = "nomic-embed-text"
 COLLECTION_NAME = "semantic-chunks"
-CONTENT_FILE = "data/content.txt"
+CONTENT_FILE = "data/content.pdf"
 
 # === Initialise LLM === #
 local_llama = ChatOllama(model=OLLAMA_MODEL)
@@ -71,8 +72,12 @@ def semantic_chunk_text(text):
 def load_text(filepath):
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Could not find file: {filepath}")
-    with open(filepath, "r", encoding="utf-8") as file:
-        return file.read()
+    pdfdoc = PdfReader(filepath)
+    raw_text = ""
+    for i, pages in enumerate(pdfdoc.pages):
+        text = pages.extract_text()
+        raw_text += text   
+    return raw_text
 
 
 # === Run Semantic Search === #
