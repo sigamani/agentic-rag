@@ -1,0 +1,59 @@
+name: Agentic RAG Inference Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test-response:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+       #   sudo apt-get install -y tesseract-ocr poppler-utils
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install black flake8
+
+      - name: Run flake8 linting
+        run: |
+          echo "Running flake8 lint check..."
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Check formatting with black
+        run: |
+          echo "Checking formatting with black..."
+          black . --check
+          
+      - name: Run agent and capture response
+        id: run_agent
+        run: |
+          RESPONSE=$(python run_agent.py --query "I’m having trouble with a Model 18 ADA dishwasher. It’s showing an error code E4 and the customer is complaining is it not draining")
+          echo "$RESPONSE"
+          echo "RESPONSE<<EOF" >> $GITHUB_ENV
+          echo "$RESPONSE" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Check for expected output
+        run: |
+          echo "$RESPONSE"
+          echo "$RESPONSE" | grep -qi "disconnect power"
+          echo "$RESPONSE" | grep -qi "drain hose"
+          echo "$RESPONSE" | grep -qi "overflow switch"
+          echo "$RESPONSE" | grep -qi "run the Service Mode Test"
