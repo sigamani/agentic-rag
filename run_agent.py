@@ -2,16 +2,17 @@ import os
 import argparse
 from PyPDF2 import PdfReader
 from rich import print
+from langchain_core.runnables import RunnableLambda
 from langchain_community.docstore.document import Document
-from langchain_community.chat_models import ChatOllama
-from langchain_ollama import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
+from langchain_ollama import OllamaEmbeddings
+from langchain_ollama import ChatOllama
 from langchain_core.runnables.passthrough import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_experimental.text_splitter import SemanticChunker
 
-# === Globals === #
+# Constants
 OLLAMA_MODEL = "mistral"
 EMBED_MODEL = "nomic-embed-text"
 COLLECTION_NAME = "semantic-chunks"
@@ -21,46 +22,60 @@ CONTENT_FILE = "data/content.pdf"
 local_llama = ChatOllama(model=OLLAMA_MODEL)
 
 
+class ConversationMemory:
+# === Simple Memory Demo === #
+    def __init__(self):
+        self.history = []
+    
+    def add_turn(self, role, message):
+        self.history.append(f"{role}: {message}")
+
+    def get_history(self):
+        return "\n".join(self.history)
+
+    def format_history(self):
+        return "\n".join([f"{msg['role']}: {msg['content']}" for msg in self.history])
+
+
+def build_rag_chain(documents):
 # === RAG Chain === #
-def build_rag_chain(documents, collection_name):
     vectorstore = Chroma.from_documents(
         documents=documents,
-        collection_name=collection_name,
+        collection_name="semantic-chunks",
         embedding=OllamaEmbeddings(model=EMBED_MODEL),
     )
 
     retriever = vectorstore.as_retriever()
 
-    prompt_template = """
-    You are an AI assistant helping a technician diagnose issues with Whirlpool dishwashers. 
-    Your goal is to provide short, clear, and actionable advice based only on the provided context and conversation history.
+    prompt_template = ChatPromptTemplate.from_template("""
+    You are an AI assistant helping a tehcnician troubleshoot appliances.
+    Use the following context and conversation history to answer the current question.
+    Your answer should summarise your findings in more more than 20 tokens.
 
-    Guidelines:
-    - Speak in short, helpful sentences (maximum of 2). 
-    - Limit your output to 80 tokens.
-    - Never hallucinate features or errors.
-    - If a technician has already performed a step, suggest the next most logical troubleshooting action.
-    - Avoid repeating prior instructions unless asked.
-    - Assume the technician is hands-on with the dishwasher.
-    - Be calm, precise, and task-focused.
+    Context:
+    {context}
 
-    Context: {context}
-    Question: {question}
+    Conversation history:
+    {conversation}
 
-    AI assistant:
-    """.strip()
+    Technician: {question}
+    AI Assistant:
+    """
+    )
 
-    prompt = ChatPromptTemplate.from_template(prompt_template)
-
-    return (
-        {"context": retriever, "question": RunnablePassthrough()}
-        | prompt
+    chain = (
+        {"context": RunnableLambda(lambda x: retriever.get_relevant_documents(x["question"])), 
+         "conversation": lambda x: x["conversation"],
+         "question": lambda x: x["question"],
+        }
+        | prompt_template
         | local_llama
         | StrOutputParser()
     )
 
+    return chain
 
-# === Semantic Chunking === #
+
 def semantic_chunk_text(text):
     text_splitter = SemanticChunker(
         OllamaEmbeddings(model=EMBED_MODEL), breakpoint_threshold_type="percentile"
@@ -68,8 +83,7 @@ def semantic_chunk_text(text):
     return text_splitter.create_documents([text])
 
 
-# === Load Text from File === #
-def load_text(filepath):
+def load_and_chunk_documents(filepath):
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Could not find file: {filepath}")
     pdfdoc = PdfReader(filepath)
@@ -77,30 +91,45 @@ def load_text(filepath):
     for i, pages in enumerate(pdfdoc.pages):
         text = pages.extract_text()
         raw_text += text   
+    
+    text_splitter = SemanticChunker(OllamaEmbeddings(model="nomic-embed-text"))
+    return text_splitter.create_documents([raw_text])    
     return raw_text
 
 
-# === Run Semantic Search === #
-def run_semantic_search(user_query):
-    print("[bold green]Performing semantic chunking...[/bold green]")
-    text = load_text(CONTENT_FILE)
-    documents = semantic_chunk_text(text)
+memory = """
+Technician: I’m having trouble with a Model 18 ADA dishwasher. It’s showing an error code E4 and the customer is complaining is it not draining
+AI Assistant: Error code E4 can indicate drainage issue. Let’s start by checking the drain hose for kinks or blockages. Have you inspected the hose?
+Technician: Yes, I’ve checked it and there doesn’t seem to be any physical obstruction.
+AI Assistant: Alright, next step is to check the drain pump. Please ensure the dishwasher is turned off and unplugged before proceeding. Can you access the drain pump?
+"""
 
-    print("[bold green]Running RAG pipeline...[/bold green]")
-    chain = build_rag_chain(documents, COLLECTION_NAME)
-    result = chain.invoke(user_query)
-    print("\n[bold yellow]AI Assistant:[/bold yellow]", result)
-
-
-# === CLI Entrypoint === #
 def main():
     parser = argparse.ArgumentParser(description="Semantic Search CLI using LangChain")
     parser.add_argument(
-        "--query", type=str, required=True, help="The user query to answer"
+        "--query", type=str, required=True, help="Technician's question"
     )
+    
     args = parser.parse_args()
+    memory = ConversationMemory()
+    query = args.query
 
-    run_semantic_search(args.query)
+    documents = load_and_chunk_documents()
+    chain = build_rag_chain(documents)
+
+
+    conversation_input = {
+        "question": query,
+        "conversation": memory,
+    }
+
+    print(f"conversation input: {conversation_input}")
+    response = chain.invoke(conversation_input)
+    print(f"response: {response}")
+    memory.add_turn("Technician", query)
+    memory.add_turn("AI Assistant", response)
+    #memory.format_history() 
+    memory.get_history() 
 
 
 if __name__ == "__main__":
