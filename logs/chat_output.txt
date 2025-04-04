@@ -1,0 +1,52 @@
+AI Assistant: 1. First, unplug the dishwasher or disconnect power from it.
+
+   2. Check if the drain hose at the plumbing connection is blocked. If water flows into the dishwasher, replace the entire drain loop (install as high as possible and attach to underside of countertop if possible).
+
+   3. Inspect the drain pump motor and its connections for any loose or open wires, as well as any signs of a fractured impeller. If necessary, replace the drain pump motor.
+
+   4. Reassemble all parts and panels after making repairs.
+
+   5. Plug in the dishwasher or reconnect power and run the Service Mode Test on page 2-3 to verify that the repair has been successful.
+
+   6. If error code E1 is still displayed, perform the Flow Meter test procedure on page 3-14 to check the electrical connections to the flow meter and the flow meter itself.
+
+   7. If the problem persists, further troubleshooting may be required, such as inspecting the control board and overflow switch.
+
+⏱️ Response time: 11.86s
+[bold cyan]Technician:[/bold cyan] I have unplugged the dishwasher. What do I do next?
+🧠 Thinking...
+2025-04-04 15:35:42,776 [INFO] HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+2025-04-04 15:35:45,461 [INFO] HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
+AI Assistant: 3. Remove access panel, remove control board cover to access control board and lay the dishwasher on its back.
+
+⏱️ Response time: 3.26s
+[bold cyan]Technician:[/bold cyan] then?
+🧠 Thinking...
+2025-04-04 15:35:54,193 [INFO] HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+2025-04-04 15:35:55,744 [INFO] HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
+AI Assistant: 6. Check the drain pump motor and its connections for any loose or open wires, as well as any signs of a fractured impeller. If necessary, replace the drain pump motor.
+
+⏱️ Response time: 2.47s
+[bold cyan]Technician:[/bold cyan] I’ve accessed the pump. There’s some debris here. I’ll clean it out and see if that
+fixes the issue.🧠 Thinking...
+2025-04-04 15:36:22,075 [INFO] HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+
+2025-04-04 15:36:24,964 [INFO] HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
+AI Assistant: 4. Reassemble all parts and panels after cleaning the drain pump, then run the Service Mode Test to verify the repair. If the problem persists, continue troubleshooting as needed.
+
+⏱️ Response time: 3.76s
+[bold cyan]Technician:[/bold cyan] 🧠 Thinking...
+2025-04-04 15:36:25,823 [INFO] HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+2025-04-04 15:36:27,396 [INFO] HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
+AI Assistant: 5. Plug in the dishwasher or reconnect power and run the Service Mode Test on page 2-3 to verify that the repair has been successful. If the problem persists, continue troubleshooting as needed.
+
+⏱️ Response time: 2.51s
+[bold cyan]Technician:[/bold cyan] It works!"
+🧠 Thinking...
+2025-04-04 15:36:49,527 [INFO] HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+2025-04-04 15:36:53,079 [INFO] HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
+AI Assistant:  Great! Now that the dishwasher is functioning properly, please remind the customer to run a full wash cycle with detergent to ensure everything is clean and working correctly.
+
+⏱️ Response time: 4.42s
+[bold cyan]Technician:[/bold cyan] 
+
