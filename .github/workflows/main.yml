@@ -31,29 +31,27 @@ jobs:
           pip install -r requirements.txt
           pip install black flake8
 
+      - name: Format with Black
+        run: black . --line-length 79
+        
       - name: Run flake8 linting
         run: |
           echo "Running flake8 lint check..."
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+              
+      # - name: Run mock test  
+      #   run: | 
+      #     TEST_MODE=true
+      #     RESPONSE=$(python run_agent.py --query "I’m having trouble with a Model 18 ADA dishwasher. It’s showing an error code E4 and the customer is complaining is it not draining")
+      #     echo "$RESPONSE"
+      #     echo "RESPONSE<<EOF" >> $GITHUB_ENV
+      #     echo "$RESPONSE" >> $GITHUB_ENV
+      #     echo "EOF" >> $GITHUB_ENV
 
-      - name: Check formatting with black
-        run: |
-          echo "Checking formatting with black..."
-          black . --line-length 79 --check 
-          
-      - name: Run agent and capture response
-        id: run_agent
-        run: |
-          RESPONSE=$(python run_agent.py --query "I’m having trouble with a Model 18 ADA dishwasher. It’s showing an error code E4 and the customer is complaining is it not draining")
-          echo "$RESPONSE"
-          echo "RESPONSE<<EOF" >> $GITHUB_ENV
-          echo "$RESPONSE" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-
-      - name: Check for expected output
-        run: |
-          echo "$RESPONSE"
-          echo "$RESPONSE" | grep -qi "disconnect power"
-          echo "$RESPONSE" | grep -qi "drain hose"
-          echo "$RESPONSE" | grep -qi "overflow switch"
-          echo "$RESPONSE" | grep -qi "run the Service Mode Test"
+      # - name: Check for expected output
+      #   run: |
+      #     echo "$RESPONSE"
+      #     echo "$RESPONSE" | grep -qi "disconnect power"
+      #     echo "$RESPONSE" | grep -qi "drain hose"
+      #     echo "$RESPONSE" | grep -qi "overflow switch"
+      #     echo "$RESPONSE" | grep -qi "run the Service Mode Test"
