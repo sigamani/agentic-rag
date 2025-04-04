@@ -1,10 +1,11 @@
 import os
 import argparse
 from rich import print
+from langchain_core.runnables import RunnableLambda
 from langchain_community.docstore.document import Document
-from langchain_community.chat_models import ChatOllama
 from langchain_community.vectorstores import Chroma
 from langchain_ollama import OllamaEmbeddings
+from langchain_ollama import ChatOllama
 from langchain_core.runnables.passthrough import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -32,7 +33,7 @@ class ConversationMemory:
         return "\n".join(self.history)
 
     def format_history(self):
-        return "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in self.history])
+        return "\n".join([f"{msg['role']}: {msg['content']}" for msg in self.history])
 
 
 def build_rag_chain(documents):
@@ -48,6 +49,7 @@ def build_rag_chain(documents):
     prompt_template = ChatPromptTemplate.from_template("""
     You are an AI assistant helping a tehcnician troubleshoot appliances.
     Use the following context and conversation history to answer the current question.
+    Your answer should summarise your findings in more more than 20 tokens.
 
     Context:
     {context}
@@ -61,7 +63,7 @@ def build_rag_chain(documents):
     )
 
     chain = (
-        {"context": retriever, 
+        {"context": RunnableLambda(lambda x: retriever.get_relevant_documents(x["question"])), 
          "conversation": lambda x: x["conversation"],
          "question": lambda x: x["question"],
         }
@@ -82,6 +84,12 @@ def load_and_chunk_documents():
     return text_splitter.create_documents([text])
 
 
+memory = """
+Technician: I’m having trouble with a Model 18 ADA dishwasher. It’s showing an error code E4 and the customer is complaining is it not draining
+AI Assistant: Error code E4 can indicate drainage issue. Let’s start by checking the drain hose for kinks or blockages. Have you inspected the hose?
+Technician: Yes, I’ve checked it and there doesn’t seem to be any physical obstruction.
+AI Assistant: Alright, next step is to check the drain pump. Please ensure the dishwasher is turned off and unplugged before proceeding. Can you access the drain pump?
+"""
 
 def main():
     parser = argparse.ArgumentParser(description="Semantic Search CLI using LangChain")
@@ -96,15 +104,19 @@ def main():
     documents = load_and_chunk_documents()
     chain = build_rag_chain(documents)
 
-    memory.add_turn("Technician", query)
 
     conversation_input = {
         "question": query,
-        "conversation": memory.get_history(),
+        "conversation": memory,
     }
+
+    print(f"conversation input: {conversation_input}")
     response = chain.invoke(conversation_input)
-    print(response)
-    memory.add_turn(user_question, response)
+    print(f"response: {response}")
+    memory.add_turn("Technician", query)
+    memory.add_turn("AI Assistant", response)
+    #memory.format_history() 
+    memory.get_history() 
 
 
 if __name__ == "__main__":
