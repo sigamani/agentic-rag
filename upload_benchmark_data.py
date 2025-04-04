@@ -3,9 +3,12 @@ from langsmith import Client
 
 client = Client()
 
-DATASET_NAME = "agentic-troubleshooting"
+DATASET_NAME = "multiturn-benchmark"
 
 examples = [
+{"id": "mt1", "inputs": {"question": "It works now! Thanks.", "conversation": "Technician: I’m having trouble with a Model 18 ADA dishwasher. It’s showing an error code E4 and isn’t draining.\nTechnician: I’ve checked the hose and it’s clear.\nTechnician: There’s some debris in the pump. I’ve cleaned it."}, "expected_sources": ["whirlpool_local", "whirlpool_online"], "expected_keywords": ["drain", "pump", "resolved"]},
+{"id": "mt2", "inputs": {"question": "It doesn’t seem to be starting the test.", "conversation": "Technician: How do I run diagnostics on an LG dishwasher?\nTechnician: Do I need to press anything else after that?"}, "expected_sources": ["lg_owner_manual"], "expected_keywords": ["diagnostic", "start button", "test mode"]}]
+"""
     {
         "inputs": {
             "question": "I’m having trouble with a Model 18 ADA dishwasher. It’s showing an error code E4 and isn’t draining.",
@@ -41,7 +44,7 @@ examples = [
         },
         "outputs": {"output": "Place cutlery in the top tray with handles down, separating items to ensure water flow."},
     },
-]
+"""
 
 # Upload to LangSmith
 print(f"Uploading examples to dataset: {DATASET_NAME}")

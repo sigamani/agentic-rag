@@ -4,7 +4,7 @@ import time
 from PyPDF2 import PdfReader
 from rich import print
 from langchain_core.runnables import RunnableLambda
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import Chroma, FAISS
 from langchain_ollama import OllamaEmbeddings, ChatOllama
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -53,9 +53,10 @@ def build_rag_chain(documents):
     print("[yellow]📦 Creating vector store and retriever...[/yellow]")
     logging.info("Building Chroma vectorstore with semantic chunks")
 
-    vectorstore = Chroma.from_documents(
+    #vectorstore = Chroma.from_documents(
+    vectorstore = FAISS.from_documents(
         documents=documents,
-        collection_name=COLLECTION_NAME,
+        #collection_name=COLLECTION_NAME,
         embedding=OllamaEmbeddings(model=EMBED_MODEL),
     )
     retriever = vectorstore.as_retriever()
