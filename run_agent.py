@@ -23,10 +23,10 @@ local_llama = ChatOllama(model=OLLAMA_MODEL)
 
 
 class ConversationMemory:
-# === Simple Memory Demo === #
+    # === Simple Memory Demo === #
     def __init__(self):
         self.history = []
-    
+
     def add_turn(self, role, message):
         self.history.append(f"{role}: {message}")
 
@@ -38,7 +38,7 @@ class ConversationMemory:
 
 
 def build_rag_chain(documents):
-# === RAG Chain === #
+    # === RAG Chain === #
     vectorstore = Chroma.from_documents(
         documents=documents,
         collection_name="semantic-chunks",
@@ -47,7 +47,8 @@ def build_rag_chain(documents):
 
     retriever = vectorstore.as_retriever()
 
-    prompt_template = ChatPromptTemplate.from_template("""
+    prompt_template = ChatPromptTemplate.from_template(
+        """
     You are an AI assistant helping a tehcnician troubleshoot appliances.
     Use the following context and conversation history to answer the current question.
     Your answer should summarise your findings in more more than 20 tokens.
@@ -64,9 +65,10 @@ def build_rag_chain(documents):
     )
 
     chain = (
-        {"context": RunnableLambda(lambda x: retriever.invoke(x["question"])), 
-         "conversation": lambda x: x["conversation"],
-         "question": lambda x: x["question"],
+        {
+            "context": RunnableLambda(lambda x: retriever.invoke(x["question"])),
+            "conversation": lambda x: x["conversation"],
+            "question": lambda x: x["question"],
         }
         | prompt_template
         | local_llama
@@ -90,10 +92,10 @@ def load_and_chunk_documents():
     raw_text = ""
     for i, pages in enumerate(pdfdoc.pages):
         text = pages.extract_text()
-        raw_text += text   
-    
+        raw_text += text
+
     text_splitter = SemanticChunker(OllamaEmbeddings(model="nomic-embed-text"))
-    return text_splitter.create_documents([raw_text])    
+    return text_splitter.create_documents([raw_text])
     return raw_text
 
 
@@ -104,12 +106,13 @@ Technician: Yes, I’ve checked it and there doesn’t seem to be any physical o
 AI Assistant: Alright, next step is to check the drain pump. Please ensure the dishwasher is turned off and unplugged before proceeding. Can you access the drain pump?
 """
 
+
 def main():
     parser = argparse.ArgumentParser(description="Semantic Search CLI using LangChain")
     parser.add_argument(
         "--query", type=str, required=True, help="Technician's question"
     )
-    
+
     args = parser.parse_args()
     memory = ConversationMemory()
     query = args.query
@@ -117,19 +120,18 @@ def main():
     documents = load_and_chunk_documents()
     chain = build_rag_chain(documents)
 
-
     conversation_input = {
         "question": query,
         "conversation": memory,
     }
 
-    #print(f"conversation input: {conversation_input}")
+    # print(f"conversation input: {conversation_input}")
     response = chain.invoke(conversation_input)
     print(f"response: {response}")
     memory.add_turn("Technician", query)
     memory.add_turn("AI Assistant", response)
-    #memory.format_history() 
-    memory.get_history() 
+    # memory.format_history()
+    memory.get_history()
 
 
 if __name__ == "__main__":
