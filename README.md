@@ -23,8 +23,7 @@ pip install -r requirements.txt
 
 ### 4. Make Sure You Have These Installed:
 - `ollama` (for running `mistral` and `nomic-embed-text` locally)
-- `poppler` (for PDF parsing, e.g. `brew install poppler` on macOS)
-- Optional: `tesseract` for OCR
+- `tesseract` (for PDF parsing, e.g. `brew install tesseract` on macOS)
 
 ## 🚀 Running the App
 
@@ -37,8 +36,7 @@ python run_agent.py --query "I’m having trouble with a Model 18 ADA dishwasher
 You can also provide prior context to simulate a running conversation:
 
 ```bash
-python run_agent.py --query "It’s showing an error code E4 and isn’t draining." \
---history "Technician: I’m having trouble with a Model 18 ADA dishwasher.\nAI Assistant: Error code E4 can indicate drainage issue. Let’s start by checking the drain hose for kinks or blockages. Have you inspected the hose?\nTechnician: Yes, I’ve checked it and there doesn’t seem to be any physical obstruction."
+python run_agent.py --query "I’ve accessed the pump. There’s some debris here. I’ll clean it out and see if that fixes the issue"
 ```
 
 ## 📁 Folder Structure
