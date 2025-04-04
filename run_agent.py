@@ -10,6 +10,15 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_experimental.text_splitter import SemanticChunker
 
+TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
+
+if not TEST_MODE:
+    local_llama = ChatOllama(model=OLLAMA_MODEL)
+    else:
+        from langchain_core.runnables import Runnable
+            local_llama = Runnable(lambda x: "Test response from mock model.")
+
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
