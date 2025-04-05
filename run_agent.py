@@ -1,15 +1,17 @@
 import os
 import logging
 import time
+from collections import defaultdict
 from PyPDF2 import PdfReader
 from rich import print
 from langchain_core.runnables import RunnableLambda
-from langchain_community.vectorstores import Chroma, FAISS
+from langchain_community.vectorstores import Chroma
 from langchain_ollama import OllamaEmbeddings, ChatOllama
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_experimental.text_splitter import SemanticChunker
-
+from langchain.schema import Document as LCDocument
+from langchain.retrievers import BM25Retriever
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,20 +19,19 @@ logging.basicConfig(
     handlers=[logging.FileHandler("rag_chat.log"), logging.StreamHandler()],
 )
 
-OLLAMA_MODEL = "mistral"
-EMBED_MODEL = "nomic-embed-text"
+OLLAMA_MODEL = "deepseek-r1:8b"
+EMBED_MODEL = "all-minilm"
 COLLECTION_NAME = "semantic-chunks"
-CONTENT_FILE = "data/content.pdf"
-
+CONTENT_FILE = "data/whirlpool.txt"
+TOKEN_LENGTH = 500
+PERSIST_PATH = "data/chroma_db"
 TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
 
 if not TEST_MODE:
-    local_llama = ChatOllama(model=OLLAMA_MODEL, max_tokens=30)
+    local_llama = ChatOllama(model=OLLAMA_MODEL, temperature=0.2, max_tokens=TOKEN_LENGTH)
 else:
     from langchain_core.runnables import Runnable
-
     local_llama = Runnable(lambda x: "Test response from mock model.")
-
 
 print("[yellow]⏳ Initialising local model...[/yellow]")
 logging.info("Loading ChatOllama model")
@@ -49,39 +50,83 @@ class ConversationMemory:
         return "\n".join(self.history)
 
 
-def build_rag_chain(documents):
-    print("[yellow]📦 Creating vector store and retriever...[/yellow]")
-    logging.info("Building Chroma vectorstore with semantic chunks")
+class HybridRetriever:
+    def __init__(self, dense_retriever, docs, k=4):
+        self.dense = dense_retriever
+        self.k = k
+        self.bm25 = BM25Retriever.from_documents(
+            [LCDocument(page_content=d.page_content, metadata=d.metadata) for d in docs]
+        )
 
-    #vectorstore = Chroma.from_documents(
-    vectorstore = FAISS.from_documents(
-        documents=documents,
-        #collection_name=COLLECTION_NAME,
+    def get_relevant_documents(self, query):
+        dense_results = self.dense.get_relevant_documents(query)
+        sparse_results = self.bm25.get_relevant_documents(query)
+        # Merge and deduplicate
+        combined = {doc.page_content: doc for doc in dense_results + sparse_results}
+        return list(combined.values())[:self.k]
+
+
+def build_rag_chain(docs):
+    print("[yellow]📦 Creating hybrid vector retriever...[/yellow]")
+    logging.info("Building Chroma vectorstore")
+
+    vectorstore = Chroma.from_documents(
+        documents=docs,
+        collection_name=COLLECTION_NAME,
         embedding=OllamaEmbeddings(model=EMBED_MODEL),
+        persist_directory=PERSIST_PATH,
     )
-    retriever = vectorstore.as_retriever()
+    vectorstore.persist()
 
-    prompt_template = ChatPromptTemplate.from_template(
-        # Control verbosity through the prompt instead of modifying ChatOllama
-        # globally, to avoid limiting output length across all completions.
-        """ You are an AI assistant helping a technician troubleshoot
-        appliances. Use the context and conversation history to
-        answer the technician's question.
-        Your response must be a single sentence, clear and specific.
+    dense_retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+    retriever = HybridRetriever(dense_retriever, docs, k=6)
 
-        Context:
-        {context}
+    prompt_template = ChatPromptTemplate.from_template("""
+### System Prompt
+You are a troubleshooting assistant specialised in Whirlpool 18" and 24" ADA dishwashers. 
+You will assist technicians by reasoning step-by-step using only the provided context from the service manual. 
+If information is not found in the context, clearly say so and ask a clarifying question. Always prioritise safety.
 
-        Conversation history:
-        {conversation}
+Each query is a multi-turn dialogue between a technician and the assistant. Use structured reasoning. Be concise, helpful, and professional.
 
-        Technician: {question}
-        AI Assistant:"""
-    )
+---
+
+### Context (from manual)
+{context}
+
+---
+
+### Current Query
+{question}
+
+---
+
+### Conversation history:
+{conversation}
+
+### Response Format
+
+**1. Issue Summary**  
+Briefly summarise the technician’s problem.
+
+**2. Diagnostic Reasoning (Step-by-Step)**  
+Use the context to:
+- Identify error codes or keywords.
+- Reference specific components or procedures (e.g., pump, hose, switch).
+- Explain *why* each step is necessary.
+
+**3. Safety Note**  
+Insert relevant safety instructions from the context (e.g., unplug before accessing pump).
+
+**4. Suggested Next Step**  
+Ask a logical next-step question (e.g., "Can you access the drain pump and check for debris?").
+
+### Output
+""")
 
     return (
         {
-            "context": RunnableLambda(lambda x: retriever.invoke(x["question"])),
+            "context": RunnableLambda(lambda x: retriever.get_relevant_documents(x["question"])),
             "conversation": lambda x: x["conversation"],
             "question": lambda x: x["question"],
         }
@@ -95,11 +140,8 @@ def load_and_chunk_documents():
     if not os.path.exists(CONTENT_FILE):
         raise FileNotFoundError(f"Could not find file: {CONTENT_FILE}")
 
-    print(f"[yellow]📖 Reading PDF content from {CONTENT_FILE}...[/yellow]")
-    logging.info("Loading and parsing PDF")
-
-    pdfdoc = PdfReader(CONTENT_FILE)
-    raw_text = "".join([page.extract_text() or "" for page in pdfdoc.pages])
+    with open(CONTENT_FILE, "r", encoding="utf-8") as f:
+        raw_text = f.read()
 
     print("[yellow]🧠 Performing semantic chunking...[/yellow]")
     logging.info("Chunking document using SemanticChunker")
@@ -112,7 +154,7 @@ def load_and_chunk_documents():
 
 
 def main():
-    print("[bold green]💬 Agentic RAG Chat Interface[/bold green]")
+    print("[bold green]💬 Agentic RAG Chat Interface (Hybrid Retrieval)[/bold green]")
     print("[dim]Type 'exit' to quit.[/dim]\n")
 
     memory = ConversationMemory()
