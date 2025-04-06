@@ -82,47 +82,18 @@ def build_rag_chain(docs):
     retriever = HybridRetriever(dense_retriever, docs, k=6)
 
     prompt_template = ChatPromptTemplate.from_template("""
-### System Prompt
-You are a troubleshooting assistant specialised in Whirlpool 18" and 24" ADA dishwashers. 
-You will assist technicians by reasoning step-by-step using only the provided context from the service manual. 
-If information is not found in the context, clearly say so and ask a clarifying question. Always prioritise safety.
+    ### Assistant Thinking Log
+    First, write down what you believe the technician is trying to solve based on the {conversation}.
+    Then list 2–3 things you are confident about from the {context}.
+    Then list 1–2 things you are uncertain about and need clarification on.
+    Only then begin your final assistant reply.
 
-Each query is a multi-turn dialogue between a technician and the assistant. Use structured reasoning. Be concise, helpful, and professional.
+    ---
 
----
+    ### Final Response (in the usual format)
+    """
+    )
 
-### Context (from manual)
-{context}
-
----
-
-### Current Query
-{question}
-
----
-
-### Conversation history:
-{conversation}
-
-### Response Format
-
-**1. Issue Summary**  
-Briefly summarise the technician’s problem.
-
-**2. Diagnostic Reasoning (Step-by-Step)**  
-Use the context to:
-- Identify error codes or keywords.
-- Reference specific components or procedures (e.g., pump, hose, switch).
-- Explain *why* each step is necessary.
-
-**3. Safety Note**  
-Insert relevant safety instructions from the context (e.g., unplug before accessing pump).
-
-**4. Suggested Next Step**  
-Ask a logical next-step question (e.g., "Can you access the drain pump and check for debris?").
-
-### Output
-""")
 
     return (
         {

@@ -31,6 +31,47 @@ Be concise. Justify your score briefly.
 Score (0–1) and justification:
 """)
 
+coherence_prompt = ChatPromptTemplate.from_template("""
+You are a helpful assistant evaluating context coherence.
+
+Given:
+- The technician's query
+- The assistant's response
+- The retrieved document context
+
+Score how well the assistant's answer aligns with and utilises the context.
+
+### Score Guide ###
+- 1 = Fully coherent with context and relevant to query
+- 0 = Incoherent or unrelated to context
+- Justify your score in 1-2 sentences.
+
+### Technician Query:
+{question}
+
+### Assistant Response:
+{response}
+
+### Retrieved Context:
+{context}
+
+Score (0–1) and justification:
+""")
+
+coherence_chain = coherence_prompt | judge_llm | StrOutputParser()
+
+def judge_coherence(question, response, context):
+    result = coherence_chain.invoke({
+        "question": question,
+        "response": response,
+        "context": context
+    })
+    try:
+        score_str = result.split("Score")[1].split(":")[1].strip().split()[0]
+        return float(score_str)
+    except Exception:
+        return 0.0
+
 judge_chain = judge_prompt | judge_llm | StrOutputParser()
 
 def judge_accuracy(question, response, reference):
