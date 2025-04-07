@@ -1,44 +1,37 @@
-import json
-from pathlib import Path
-from langchain_core.documents import Document
+import re
+import tiktoken
 
-def load_structured_json(json_path):
-    with open(json_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+class TitleChunker:
+    def __init__(self, max_title_tokens=50, max_title_words=15):
+        self.max_title_tokens = max_title_tokens
+        self.max_title_words = max_title_words
+        self.encoder = tiktoken.get_encoding("gpt2")
 
-    all_chunks = []
-    for page_data in data:
-        page_number = page_data.get("page")
-        items = page_data.get("items", [])
-        current_title = None
-        buffer = []
+    def trim_title(self, title):
+        # Limit by word count first
+        words = title.strip().split()
+        if len(words) > self.max_title_words:
+            title = " ".join(words[:self.max_title_words])
+        # Then ensure token count is safe
+        tokens = self.encoder.encode(title)
+        if len(tokens) > self.max_title_tokens:
+            trimmed_tokens = tokens[:self.max_title_tokens]
+            title = self.encoder.decode(trimmed_tokens)
+        return title.strip()
 
-        for item in items:
-            if item.get("type") == "heading":
-                # Flush previous chunk
-                if buffer and current_title:
-                    all_chunks.append(Document(
-                        page_content="\n".join(buffer),
-                        metadata={
-                            "title": current_title,
-                            "page": page_number
-                        }
-                    ))
-                    buffer = []
-
-                current_title = item.get("value", "Untitled")
-
-            elif item.get("type") == "text":
-                buffer.append(item.get("value", ""))
-
-        # Flush final buffer for page
-        if buffer and current_title:
-            all_chunks.append(Document(
-                page_content="\n".join(buffer),
-                metadata={
-                    "title": current_title,
-                    "page": page_number
-                }
-            ))
-
-    return all_chunks
+    def chunk(self, text):
+        sections = re.split(r'\n(?=\d+\.\s)', text)
+        chunks = []
+        for i, section in enumerate(sections):
+            lines = section.strip().split('\n')
+            if not lines:
+                continue
+            raw_title = lines[0].strip()
+            body = '\n'.join(lines[1:]).strip() if len(lines) > 1 else ""
+            trimmed_title = self.trim_title(raw_title) if raw_title else f"Section {i+1}"
+            chunks.append({
+                "title": trimmed_title,
+                "text": body,
+                "page": i + 1
+            })
+        return chunks
