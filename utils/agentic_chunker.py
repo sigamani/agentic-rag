@@ -1,47 +1,39 @@
+
+import re
 import tiktoken
-from typing import List, Dict
-from langchain_ollama import ChatOllama
-from langchain.prompts import PromptTemplate
 
-# Config
-MODEL = "mistral"
-MAX_CHUNK_TOKENS = 256
-ENCODING = "gpt2"
+class AgenticChunker:
+    def __init__(self, max_tokens=250, overlap=30):
+        self.max_tokens = max_tokens
+        self.overlap = overlap
+        self.encoder = tiktoken.get_encoding("gpt2")
 
-enc = tiktoken.get_encoding(ENCODING)
+    def split_by_symptom_blocks(self, text):
+        # Chunk on common troubleshooting section dividers or symptom keywords
+        sections = re.split(r'(?i)(?=symptom:|issue:|problem:|error code\s*\w+)', text)
+        blocks = []
+        for section in sections:
+            section = section.strip()
+            if not section:
+                continue
+            tokens = self.encoder.encode(section)
+            if len(tokens) > self.max_tokens:
+                # Split long sections by tokens
+                start = 0
+                while start < len(tokens):
+                    end = min(start + self.max_tokens, len(tokens))
+                    chunk_tokens = tokens[start:end]
+                    chunk = self.encoder.decode(chunk_tokens)
+                    blocks.append(chunk.strip())
+                    start += self.max_tokens - self.overlap
+            else:
+                blocks.append(section)
+        return blocks
 
-def count_tokens(text: str) -> int:
-    return len(enc.encode(text))
-
-def split_with_llm(text: str, page: int = None, title: str = None) -> List[Dict]:
-    system_prompt = (
-        "Split the following technical manual section into semantically meaningful, self-contained chunks.\n"
-        "Each chunk should:\n"
-        "- Be no longer than 256 tokens.\n"
-        "- Never break mid-sentence.\n"
-        "- Represent a single step, operation, or idea.\n"
-        "- Exclude pure headings or labels with no content.\n"
-        "- Ignore chunks that are trivial (e.g. model numbers or isolated codes).\n"
-        "- Normalise curly quotes to straight quotes.\n\n"
-        "Output the chunks as a numbered list. Do not include commentary or titles.\n\n"
-        "Manual Section:\n{text}"
-    )
-
-    llm = ChatOllama(model=MODEL, temperature=0.2, max_tokens=1024)
-    prompt = PromptTemplate.from_template(system_prompt)
-    response = llm.invoke(prompt.format(text=text)).content
-
-    chunks = []
-    for line in response.strip().split("\n"):
-        if line.strip() and line[0].isdigit():
-            content = line.split('.', 1)[-1].strip()
-            if count_tokens(content) <= MAX_CHUNK_TOKENS:
-                chunks.append({
-                    "text": content,
-                    "metadata": {
-                        "source_page": page,
-                        "source_title": title,
-                        "source_paragraph": text
-                    }
-                })
-    return chunks
+    def chunk(self, text, metadata=None):
+        blocks = self.split_by_symptom_blocks(text)
+        return [{
+            "title": f"Symptom Block {i+1}",
+            "text": block,
+            "page": metadata.get("page", 0) if metadata else 0
+        } for i, block in enumerate(blocks)]
