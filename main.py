@@ -59,8 +59,8 @@ class HybridRetriever:
         )
 
     def get_relevant_documents(self, query):
-        dense_results = self.dense.get_relevant_documents(query)
-        sparse_results = self.bm25.get_relevant_documents(query)
+        dense_results = self.dense.invoke(query)
+        sparse_results = self.bm25.invoke(query)
         # Merge and deduplicate
         combined = {doc.page_content: doc for doc in dense_results + sparse_results}
         return list(combined.values())[:self.k]
@@ -76,7 +76,7 @@ def build_rag_chain(docs):
         embedding=OllamaEmbeddings(model=EMBED_MODEL),
         persist_directory=PERSIST_PATH,
     )
-    vectorstore.persist()
+    #vectorstore.persist()
 
     dense_retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
     retriever = HybridRetriever(dense_retriever, docs, k=6)

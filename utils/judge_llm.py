@@ -1,11 +1,11 @@
-import json
-from typing import Literal
-
+from typing import Literal, Dict
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import ChatOllama
 from pydantic import BaseModel
 from langchain_core.runnables import Runnable
 
+import json
+import re
 
 # Define the structured output format
 class EvaluationResult(BaseModel):
@@ -54,32 +54,35 @@ judge_coherence_prompt = ChatPromptTemplate.from_messages(
 judge_model: Runnable = ChatOllama(model="mistral", temperature=0.0)
 
 
-def _run_eval(prompt_template: ChatPromptTemplate, input_map: dict) -> EvaluationResult:
-    prompt = prompt_template.format(**input_map)
-    response = judge_model.invoke(prompt)
+def _run_eval(prompt_template: str, variables: Dict) -> Dict:
 
+    llm = ChatOllama(model="mistral")
+    prompt = prompt_template.format(**variables)
+    response = llm.invoke(prompt).content
+
+    # Try direct JSON parse
     try:
-        # Ensure we only extract the JSON portion (if extra text exists)
-        content = response.content.strip()
+        return json.loads(response)
+    except json.JSONDecodeError:
+        pass
 
-        # Try to extract the JSON object via regex if full parse fails
-        try:
-            parsed = json.loads(content)
-        except json.JSONDecodeError:
-            import re
+    # Try manually extracting score and explanation
+    try:
+        # Find score using regex
+        score_match = re.search(r'"score"\s*:\s*(\d+(\.\d+)?)', response)
+        explanation_match = re.search(r'"explanation"\s*:\s*"([^"]+)"', response, re.DOTALL)
 
-            # Match first valid-looking JSON object
-            match = re.search(r'\{\s*"score"\s*:\s*[0-9.]+,\s*"explanation"\s*:\s*".+?"\s*\}', content, re.DOTALL)
-            if match:
-                parsed = json.loads(match.group())
-            else:
-                raise ValueError("No valid JSON object found in response")
+        if score_match and explanation_match:
+            return {
+                "score": float(score_match.group(1)),
+                "explanation": explanation_match.group(1)
+            }
 
-        return EvaluationResult(**parsed)
-
+        raise ValueError("Could not parse fallback judge output.")
     except Exception as e:
-        print("❌ Failed to parse judge response as JSON:\n", response.content)
+        print("❌ Failed to parse judge response as JSON or fallback format:\n", response)
         raise e
+
 
 def judge_accuracy(question: str, response: str, ground_truth: str) -> float:
     result = _run_eval(judge_accuracy_prompt, {
@@ -87,7 +90,7 @@ def judge_accuracy(question: str, response: str, ground_truth: str) -> float:
         "response": response,
         "ground_truth": ground_truth,
     })
-    return result.score
+    return result["score"]
 
 
 def judge_coherence(context: str, question: str, response: str) -> float:
@@ -96,4 +99,4 @@ def judge_coherence(context: str, question: str, response: str) -> float:
         "question": question,
         "response": response,
     })
-    return result.score
+    return result["score"]
