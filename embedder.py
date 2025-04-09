@@ -5,7 +5,7 @@ from langchain_community.vectorstores import Chroma
 from langchain_ollama import OllamaEmbeddings
 from constants import EMBED_MODEL, CHROMA_DB_DIR, COLLECTION_NAME
 
-def embed_documents(documents: list[Document], overwrite: bool = False) -> Chroma:
+def embed_documents(documents: list[Document], overwrite: bool = True) -> Chroma:
     if os.path.exists(CHROMA_DB_DIR) and not overwrite:
         print("[yellow]⚠️ Skipping embedding - DB already exists[/yellow]")
         return Chroma(persist_directory=CHROMA_DB_DIR, collection_name=COLLECTION_NAME, embedding_function=OllamaEmbeddings(model=EMBED_MODEL))
@@ -17,6 +17,5 @@ def embed_documents(documents: list[Document], overwrite: bool = False) -> Chrom
         embedding=OllamaEmbeddings(model=EMBED_MODEL),
         persist_directory=CHROMA_DB_DIR,
     )
-    vectordb.persist()
     print("[green]✅ Vectorstore created and persisted[/green]")
     return vectordb

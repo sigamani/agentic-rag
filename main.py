@@ -5,7 +5,7 @@ import logging
 import asyncio
 from rich import print
 
-from constants import BENCHMARK_FILE, CHAT_MODEL, TEXT_FILE
+from constants import BENCHMARK_FILE, CHAT_MODEL, EMBED_MODEL, TEXT_FILE
 from create_vector_store import create_vector_store, vector_store_exists
 from parser import chunk_txt_to_docs
 from retrieval import get_retriever
@@ -45,7 +45,7 @@ def run_chat(chain, retriever, verbose=False):
                 break
 
             t0 = time.time()
-            context = retriever.invoke(query)
+            context = retriever.get_relevant_documents(query)
             t1 = time.time()
             response = chain.invoke({
                 "question": query,
@@ -81,27 +81,18 @@ async def run_benchmark(chain, retriever):
             examples.append(ex)
 
     results = []
-    for i, ex in enumerate(examples):
+    for i, example in enumerate(examples):
 
-        inputs = ex.get("inputs", {})
-        question = inputs.get("question", "")
-        conversation = inputs.get("conversation", "")
-        raw_expected = ex.get("outputs", {}).get("answer", "")
-        expected = raw_expected.content if hasattr(raw_expected, "content") else str(raw_expected)
-        if not question or not expected:
-            print(f"⚠️ Skipping malformed example {i}")
-            continue
+        question = example["inputs"]["question"]
+        conversation = example["inputs"].get("conversation", "")
+        expected_keywords = example.get("metadata", {}).get("expected_keywords", [])
+        golden_reference = example.get("outputs", {}).get("answer", "")
 
-        t0 = time.time()
-        context_docs = retriever.get_relevant_documents(question)
-        context_str = str("\n".join([doc.page_content for doc in context_docs]))
-        response_obj = chain.invoke({"question": question, "conversation": conversation, "context": context_docs})
-        response = str(response_obj.content) if hasattr(response_obj, "content") else str(response_obj)
         t1 = time.time()
-
         accuracy, coherence, retrieval = await asyncio.gather(
-            judge_accuracy(response, expected),
-            judge_coherence(response, conversation),
+            judge_accuracy(question, response, golden_reference),
+            judge_coherence(conversation, question, response),
+            judge_coherence(conversation, question, response),
             #judge_retrieval_quality(response, context_str),
         )
 

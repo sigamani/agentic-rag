@@ -3,7 +3,7 @@ from typing import List
 from langchain.schema import Document
 from langchain_experimental.text_splitter import SemanticChunker as LangchainSemanticChunker
 from langchain_ollama import OllamaEmbeddings
-
+from constants import EMBED_MODEL
 # Base class
 class BaseChunker:
     def __init__(self, metadata: dict = None):
@@ -21,7 +21,7 @@ class BaseChunker:
 
 # Semantic chunking using embeddings
 class SemanticChunker(BaseChunker):
-    def __init__(self, model_name="all-minilm"):
+    def __init__(self, model_name=EMBED_MODEL):
         super().__init__()
         self.splitter = LangchainSemanticChunker(OllamaEmbeddings(model=model_name))
 

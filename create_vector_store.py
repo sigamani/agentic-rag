@@ -6,10 +6,10 @@ import os
 def vector_store_exists(path=CHROMA_DB_DIR) -> bool:
     return os.path.exists(path) and os.path.isdir(path)
 
-def create_vector_store(pdf_path=PDF_FILE, txt_path=TEXT_FILE, strategy="semantic", overwrite=False):
+def create_vector_store(pdf_path=PDF_FILE, txt_path=TEXT_FILE, strategy="agentic", overwrite=False):
     if not overwrite and vector_store_exists():
         print("[yellow]⚠️ Vector store already exists. Skipping parsing/chunking/embedding.[/yellow]")
-        from langchain_community.vectorstores import Chroma
+        from langchain_chroma import Chroma
         from langchain_ollama import OllamaEmbeddings
         from constants import COLLECTION_NAME, EMBED_MODEL
         return [], Chroma(persist_directory=CHROMA_DB_DIR, collection_name=COLLECTION_NAME, embedding_function=OllamaEmbeddings(model=EMBED_MODEL))
