@@ -34,7 +34,7 @@ class SemanticChunker(BaseChunker):
 class AgenticChunker(BaseChunker):
     def chunk(self, text: str) -> List[Document]:
         chunks = text.split("\n\n")
-        return [Document(page_content=chunk.strip()) for chunk in chunks if chunk.strip()]
+        return [Document(page_content=chunk) for chunk in chunks if chunk]
 
 
 # Title-based chunker
@@ -43,8 +43,8 @@ class TitleChunker(BaseChunker):
         sections = re.split(r"(?m)^([A-Z\\s]{5,})$", text)
         docs = []
         for i in range(1, len(sections), 2):
-            title = sections[i].strip()
-            body = sections[i + 1].strip() if i + 1 < len(sections) else ""
+            title = sections[i]
+            body = sections[i + 1] if i + 1 < len(sections) else ""
             if body:
                 docs.append(Document(page_content=body, metadata={"title": title}))
         return docs

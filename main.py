@@ -2,77 +2,117 @@ import argparse
 import json
 import time
 import logging
+import asyncio
 from rich import print
 
 from constants import BENCHMARK_FILE, CHAT_MODEL, TEXT_FILE
 from create_vector_store import create_vector_store, vector_store_exists
 from parser import chunk_txt_to_docs
-
+from retrieval import get_retriever
+from rag_chain import build_chain
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnableLambda
+from langchain_core.runnables import RunnableLambda, RunnableMap
+from langchain.memory import ConversationBufferMemory
+
+from langchain_chroma import Chroma  
+from judge_llm import (
+    judge_accuracy,
+    judge_coherence,
+    #judge_retrieval_quality,
+)
 
 logging.basicConfig(level=logging.INFO)
 
+def trim_response(response: str, max_tokens: int = 30) -> str:
+    if "### Final Response" in response:
+        response = response.split("### Final Response", 1)[-1]
+    return " ".join(response.split()[:max_tokens]) + " ..."
 
-def build_chain(retriever):
-    prompt = ChatPromptTemplate.from_template(
-        """
-        ### Assistant Thinking Log
-        First, write down what you believe the technician is trying to solve based on the {conversation}.
-        Then list 2–3 things you are confident about from the {context}.
-        Then list 1–2 things you are uncertain about and need clarification on.
-        Only then begin your final assistant reply.
+def format_timings(t0, t1, t2) -> str:
+    return f"🧠 Retrieval: {t1 - t0:.2f}s | 🗣️ Chat: {t2 - t1:.2f}s | ⏱️ Total: {t2 - t0:.2f}s"
 
-        ---
-
-        Here is the short answer...
-        ### Final Response (in the usual format)
-        """
-    )
-    llm = ChatOllama(model=CHAT_MODEL, temperature=0.2, max_tokens=500)
-    return (
-        {
-            "context": RunnableLambda(lambda x: retriever.get_relevant_documents(x["question"])),
-            "conversation": lambda x: x["conversation"],
-            "question": lambda x: x["question"],
-        }
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
-
-
-def run_chat(chain, verbose=False):
-    print("[bold green]💬 RAG Chat Interface[/bold green]")
-    print("[dim]Type 'exit' to quit.[/dim]\n")
-    history = []
+def run_chat(chain, retriever, verbose=False):
+    print("\n💬 RAG Chat Interface (type 'exit' to quit)\n")
+    memory = ConversationBufferMemory(return_messages=False)
 
     while True:
-        query = input("[bold cyan]Technician:[/bold cyan] ").strip()
-        if query.lower() in ["exit", "quit"]:
-            print("[italic]👋 Goodbye![/italic]")
+        try:
+            query = input("Technician: ")
+            if query.lower() in ["exit", "quit"]:
+                print("👋 Goodbye!")
+                break
+
+            t0 = time.time()
+            context = retriever.invoke(query)
+            t1 = time.time()
+            response = chain.invoke({
+                "question": query,
+                "conversation": memory.buffer,
+                "context": context,
+            })
+            t2 = time.time()
+
+            output = response if verbose else trim_response(response)
+            print(f"\nAI Assistant: {output}")
+            print(format_timings(t0, t1, t2) + "\n")
+
+            memory.save_context({"input": query}, {"output": response})
+
+        except KeyboardInterrupt:
+            print("\n👋 Exiting chat.")
             break
+        except Exception as e:
+            print(f"❌ Error: {e}")
 
-        history.append(f"Technician: {query}")
-        conversation = "\n".join(history)
+async def run_benchmark(chain, retriever):
+    import jsonlines
+    from pathlib import Path
 
-        print("[yellow]🧠 Thinking...[/yellow]")
-        start = time.time()
-        response = chain.invoke({"question": query, "conversation": conversation})
-        end = time.time()
+    benchmark_path = Path("data/benchmark_unified.jsonl")
+    if not benchmark_path.exists():
+        raise FileNotFoundError("Benchmark file not found.")
 
-        if verbose:
-            print(f"[bold magenta]AI Assistant:[/bold magenta] {response}")
-        else:
-            final = response.split("### Final Response")[-1].strip()
-            trimmed = " ".join(final.split()[:30])
-            print(f"[bold magenta]AI Assistant:[/bold magenta] {trimmed} ...")
+    print("\n🔬 Running benchmark examples\n")
+    examples = []
+    with jsonlines.open(benchmark_path) as reader:
+        for ex in reader:
+            examples.append(ex)
 
-        print(f"[dim]⏱️ Response time: {end - start:.2f}s[/dim]\n")
-        history.append(f"AI Assistant: {response}")
+    results = []
+    for i, ex in enumerate(examples):
 
+        inputs = ex.get("inputs", {})
+        question = inputs.get("question", "")
+        conversation = inputs.get("conversation", "")
+        raw_expected = ex.get("outputs", {}).get("answer", "")
+        expected = raw_expected.content if hasattr(raw_expected, "content") else str(raw_expected)
+        if not question or not expected:
+            print(f"⚠️ Skipping malformed example {i}")
+            continue
+
+        t0 = time.time()
+        context_docs = retriever.get_relevant_documents(question)
+        context_str = str("\n".join([doc.page_content for doc in context_docs]))
+        response_obj = chain.invoke({"question": question, "conversation": conversation, "context": context_docs})
+        response = str(response_obj.content) if hasattr(response_obj, "content") else str(response_obj)
+        t1 = time.time()
+
+        accuracy, coherence, retrieval = await asyncio.gather(
+            judge_accuracy(response, expected),
+            judge_coherence(response, conversation),
+            #judge_retrieval_quality(response, context_str),
+        )
+
+        print(f"[{i+1}] Technician: {question}")
+        print(f"     ✅ Accuracy: {accuracy:.2f} | 🧠 Coherence: {coherence:.2f} | 📚 Retrieval: {retrieval:.2f} | ⏱️ {t1 - t0:.2f}s\n")
+        results.append((accuracy, coherence, retrieval))
+
+    if results:
+        avg = lambda idx: sum(r[idx] for r in results) / len(results)
+        print(f"🏁 Benchmark complete.")
+        print(f"   ✅ Avg Accuracy: {avg(0):.2f}\n   🧠 Avg Coherence: {avg(1):.2f}\n   📚 Avg Retrieval: {avg(2):.2f}\n")
 
 def main():
     parser = argparse.ArgumentParser()
@@ -81,23 +121,21 @@ def main():
     args = parser.parse_args()
 
     if vector_store_exists():
-        from langchain_community.vectorstores import Chroma
         from langchain_ollama import OllamaEmbeddings
         from constants import CHROMA_DB_DIR, COLLECTION_NAME, EMBED_MODEL
-        from retrieval import get_retriever
-
         docs = chunk_txt_to_docs(TEXT_FILE, strategy="semantic")
         vectordb = Chroma(persist_directory=CHROMA_DB_DIR, collection_name=COLLECTION_NAME, embedding_function=OllamaEmbeddings(model=EMBED_MODEL))
     else:
         docs, vectordb = create_vector_store()
 
-
     retriever = get_retriever("hybrid", docs, vectordb)
     chain = build_chain(retriever)
 
     if args.run == "chat":
-        run_chat(chain, verbose=args.verbose)
-
+        run_chat(chain, retriever, verbose=args.verbose)
+    elif args.run == "benchmark":
+        asyncio.run(run_benchmark(chain, retriever))
 
 if __name__ == "__main__":
     main()
+
