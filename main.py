@@ -1,4 +1,8 @@
 import argparse
+import logging
+import time
+from functools import lru_cache
+from pathlib import Path
 from langchain_community.vectorstores import Chroma
 from langchain_ollama import OllamaEmbeddings, ChatOllama
 from langchain_core.output_parsers import StrOutputParser
@@ -6,9 +10,19 @@ from langchain_core.prompts import PromptTemplate
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
 
+logging.basicConfig(
+    filename="main.log",
+    filemode="a",
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+@lru_cache(maxsize=1)
 def load_vectorstore(persist_dir: str):
     embedder = OllamaEmbeddings(model="nomic-embed-text")
-    return Chroma(persist_directory=persist_dir, embedding_function=embedder)
+    logger.info("Loading vectorstore from: %s", persist_dir)
+    return Chroma(persist_directory=persist_dir, embedding_function=embedder, collection_metadata={"cache": True})
 
 def get_conversational_chain():
     vectordb = load_vectorstore("vectorstore")
@@ -21,6 +35,11 @@ def get_conversational_chain():
     )
     prompt = PromptTemplate.from_template(
         """
+        You are a helpful assistant for diagnosing and fixing Whirlpool dishwashers.
+        Only answer if the user's question is clearly related to Whirlpool dishwashers.
+        If it's not, politely say you're only trained to help with those.
+
+
         You are a helpful assistant. Use the following context to answer the user's question.
         Maintain the conversation history and build upon previous answers when necessary.
 
@@ -36,6 +55,7 @@ def get_conversational_chain():
         Provide a helpful, concise answer followed by a short summary of key points.
         """
     )
+    logger.info("Conversational retrieval chain created.")
     return ConversationalRetrievalChain.from_llm(
         llm=ChatOllama(model="mistral"),
         retriever=retriever,
@@ -59,7 +79,7 @@ def distill_answer(full_answer: str) -> str:
         Do not summarize everything. Focus on just one issue and one step.
 
         Example:
-        \"Sounds like the drain pump’s jammed. Let’s check the hose for a clog first.\"
+        "Sounds like the drain pump’s jammed. Let’s check the hose for a clog first."
 
         Assistant's full response:
         {response}
@@ -70,18 +90,50 @@ def distill_answer(full_answer: str) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description="Conversational RAG over Whirlpool vectorstore")
-    parser.add_argument("--query", type=str, required=True, help="Your user question")
+    parser.add_argument("--query", type=str, help="Single user question")
+    parser.add_argument("--chat", action="store_true", help="Start interactive conversation loop")
     parser.add_argument("--verbose", action="store_true", help="Show full assistant output")
     args = parser.parse_args()
 
     chain = get_conversational_chain()
-    result = chain.invoke({"question": args.query})
 
-    print("\n=== Assistant ===")
-    if args.verbose:
-        print(result["answer"])
+    def respond(question):
+        start = time.time()
+        result = chain.invoke({"question": question})
+        elapsed = time.time() - start
+        logger.info("Response in %.2fs", elapsed)
+
+        docs = result.get("source_documents", [])
+        if not docs:
+            return "I'm here to help with Whirlpool dishwashers, but I couldn't find anything relevant to that question."
+
+        return result["answer"] if args.verbose else distill_answer(result["answer"])
+
+    if args.chat:
+        logger.info("Interactive chat mode")
+        print("
+=== Assistant Chat Mode ===
+(Press Ctrl+C or type 'exit' to quit)
+")
+        while True:
+            try:
+                q = input("You: ").strip()
+                if q.lower() in {"exit", "quit"}:
+                    print("Exiting chat. Goodbye!")
+                    break
+                print("Assistant:
+" + respond(q))
+            except KeyboardInterrupt:
+                print("
+Exiting chat. Goodbye!")
+                break
+    elif args.query:
+        logger.info("Single query: %s", args.query)
+        print("
+=== Assistant ===
+" + respond(args.query))
     else:
-        print(distill_answer(result["answer"]))
+        print("Please provide either --query or --chat.")
 
 if __name__ == "__main__":
     main()
