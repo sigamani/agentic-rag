@@ -3,20 +3,23 @@ import logging
 import time
 from functools import lru_cache
 from pathlib import Path
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 from langchain_ollama import OllamaEmbeddings, ChatOllama
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
 
+# --- Logging Setup ---
+log_file = "main.log"
 logging.basicConfig(
-    filename="main.log",
+    filename=log_file,
     filemode="a",
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s"
 )
 logger = logging.getLogger(__name__)
+logger.info("Starting Whirlpool Assistant RAG script")
 
 @lru_cache(maxsize=1)
 def load_vectorstore(persist_dir: str):
@@ -35,10 +38,9 @@ def get_conversational_chain():
     )
     prompt = PromptTemplate.from_template(
         """
-        You are a helpful assistant for diagnosing and fixing Whirlpool dishwashers.
-        Only answer if the user's question is clearly related to Whirlpool dishwashers.
+        You are a helpful assistant for diagnosing and fixing dishwashers.
+        Only answer if the user's question is clearly related to dishwashers.
         If it's not, politely say you're only trained to help with those.
-
 
         You are a helpful assistant. Use the following context to answer the user's question.
         Maintain the conversation history and build upon previous answers when necessary.
@@ -98,43 +100,51 @@ def main():
     chain = get_conversational_chain()
 
     def respond(question):
+        logger.info("User question: %s", question)
         start = time.time()
         result = chain.invoke({"question": question})
         elapsed = time.time() - start
-        logger.info("Response in %.2fs", elapsed)
+        logger.info("Chain response time: %.2fs", elapsed)
 
         docs = result.get("source_documents", [])
-        if not docs:
-            return "I'm here to help with Whirlpool dishwashers, but I couldn't find anything relevant to that question."
+        retrieved_text = " ".join(doc.page_content.lower() for doc in docs)
+        question_terms = set(question.lower().split())
+        match_score = sum(1 for word in question_terms if word in retrieved_text)
 
-        return result["answer"] if args.verbose else distill_answer(result["answer"])
+        logger.info("Match score: %s", match_score)
+
+        if match_score < 2:
+            fallback_msg = "Sorry, I couldn’t find anything in our Whirlpool manuals related to that."
+            logger.info("Fallback response returned due to low match score")
+            return fallback_msg
+
+        final_answer = result["answer"] if args.verbose else distill_answer(result["answer"])
+        logger.info("Final assistant response: %s", final_answer)
+        return final_answer
 
     if args.chat:
-        logger.info("Interactive chat mode")
-        print("
-=== Assistant Chat Mode ===
-(Press Ctrl+C or type 'exit' to quit)
-")
+        logger.info("Interactive chat mode started")
+        print("=== Assistant Chat Mode === (Press Ctrl+C or type 'exit' to quit)")
+        print("Assistant: Hi! I'm here to help with Whirlpool dishwashers. What’s the issue?")
         while True:
             try:
-                q = input("You: ").strip()
+                q = input("[You]: ").strip()
                 if q.lower() in {"exit", "quit"}:
+                    logger.info("Session ended by user.")
                     print("Exiting chat. Goodbye!")
                     break
-                print("Assistant:
-" + respond(q))
+                response = respond(q)
+                print("[Assistant]: ", response)
             except KeyboardInterrupt:
-                print("
-Exiting chat. Goodbye!")
+                logger.info("Session interrupted by user.")
+                print("Exiting chat. Goodbye!")
                 break
     elif args.query:
-        logger.info("Single query: %s", args.query)
-        print("
-=== Assistant ===
-" + respond(args.query))
+        logger.info("Single-query mode triggered: %s", args.query)
+        print(f"[Assistant]: {respond(args.query)}")
     else:
-        print("Please provide either --query or --chat.")
+        logger.warning("No query or chat flag provided.")
+        print(f"Please provide either --query or --chat.")
 
 if __name__ == "__main__":
     main()
-
