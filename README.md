@@ -59,7 +59,7 @@ Retrieval match is scored simply via token overlap and fallback responses are tr
 | ChromaDB      | Local persistent vector store                     |
 | Gemini Flash  | PDF → structured text & table extraction          |
 | LangGraph     | Used for document-agent workflows                 |
-| HybridRetriever | Optional BM25 + dense fusion for better recall |
+| DenseRetriever | semantic search over Chroma  |
 
 ---
 
@@ -118,13 +118,7 @@ Logs and outputs will be saved to `main.log`.
 
 ## 📊 Retrieval & Benchmarking Notes
 
-The current live assistant uses:
-```python
-retriever = vectordb.as_retriever(search_kwargs={"filter": {"document_id": "whirlpool"}})
-```
-This is a **pure dense retriever** using semantic search over Chroma — not the hybrid version.
-
-However, hybrid retrieval was tested and benchmarked using LangSmith, and the results are available here:  
+Retrieval was tested and benchmarked using LangSmith, and the results are available here:  
 🔗 [Benchmark results (LangSmith logs)](https://github.com/sigamani/agentic-rag/tree/main/logs/hybrid/semantic/mistral_all-minilm/structured_reasoning_v1)
 
 ---
