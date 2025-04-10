@@ -25,14 +25,11 @@ Prompts are structured to:
 - Minimise hallucinations
 - Summarise with a distillation prompt (2 sentences, actionable)
 
-Retrieval match is scored simply via token overlap and fallback responses are triggered if low match is detected.
-
 ---
 
 ## 💡 Known Limitations
 
 - ❌ No multimodal retriever interface (images extracted but unused at runtime)
-- ❌ Retrieval match scoring is naive (non-semantic)
 - ❌ Summarisation not cached (redundant compute)
 - ❌ Chroma has scaling limits — Pinecone planned for production
 - ❌ No use of section filtering yet, despite indexing
@@ -65,9 +62,7 @@ Retrieval match is scored simply via token overlap and fallback responses are tr
 
 ## ✅ Why This Works
 
-This agent handles technical queries like "E4.1 error" and "filter not draining" with grounded, document-scoped responses. It integrates prompt safety, source metadata, and hybrid-ready architecture — ideal for scaling into an enterprise-grade troubleshooting assistant.
-
-
+This agent handles the very task specific technical queries like "E4.1 error" and "filter not draining" with grounded, document-scoped responses. It integrates prompt safety, source metadata, and hybrid-ready architecture. 
 
 
 ---
@@ -112,7 +107,7 @@ Logs and outputs will be saved to `main.log`.
 
 - 🚫 This repo **does not currently include unit tests**
 - ⚠️ The CI/CD pipeline is **not functioning** — no automated build, test, or deployment setup is active
-- ✅ These components are planned in the future as the codebase stabilizes and interface contracts are formalized
+- ✅ I would plan this in the future as the codebase stabilizes and interface contracts are formalized
 
 ---
 
@@ -131,6 +126,4 @@ During experimentation, multiple chunking techniques were evaluated:
 - `AgenticGraphChunker`: combines document structure + section links
 - `SemanticChunker`: based on cosine similarity and embedding cohesion
 
-Despite the advanced graph and multimodal-aware chunkers, **semantic chunking with cosine similarity** performed **just as well** in terms of retrieval precision and generation quality when paired with extracted multimodal descriptions.
-
-These findings shaped the current design toward simplicity, performance, and reproducibility.
+Despite the advanced graph and multimodal-aware chunkers, **semantic chunking with cosine similarity** performed **just as well** in terms of retrieval precision and generation quality when paired with extracted multimodal descriptions. Probably due to the fact that most of the context in these documents are sentences.
