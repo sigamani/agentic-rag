@@ -1,169 +1,150 @@
-import os
+import argparse
 import logging
 import time
-from collections import defaultdict
-from PyPDF2 import PdfReader
-from rich import print
-from langchain_core.runnables import RunnableLambda
-from langchain_community.vectorstores import Chroma
+from functools import lru_cache
+from pathlib import Path
+from langchain_chroma import Chroma
 from langchain_ollama import OllamaEmbeddings, ChatOllama
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_experimental.text_splitter import SemanticChunker
-from langchain.schema import Document as LCDocument
-from langchain.retrievers import BM25Retriever
+from langchain_core.prompts import PromptTemplate
+from langchain.memory import ConversationBufferMemory
+from langchain.chains import ConversationalRetrievalChain
 
+# --- Logging Setup ---
+log_file = "main.log"
 logging.basicConfig(
+    filename=log_file,
+    filemode="a",
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.FileHandler("rag_chat.log"), logging.StreamHandler()],
+    format="%(asctime)s | %(levelname)s | %(message)s"
 )
+logger = logging.getLogger(__name__)
+logger.info("Starting Whirlpool Assistant RAG script")
 
-OLLAMA_MODEL = "deepseek-r1:8b"
-EMBED_MODEL = "all-minilm"
-COLLECTION_NAME = "semantic-chunks"
-CONTENT_FILE = "data/whirlpool.txt"
-TOKEN_LENGTH = 500
-PERSIST_PATH = "data/chroma_db"
-TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
+@lru_cache(maxsize=1)
+def load_vectorstore(persist_dir: str):
+    embedder = OllamaEmbeddings(model="nomic-embed-text")
+    logger.info("Loading vectorstore from: %s", persist_dir)
+    return Chroma(persist_directory=persist_dir, embedding_function=embedder, collection_metadata={"cache": True})
 
-if not TEST_MODE:
-    local_llama = ChatOllama(
-        model=OLLAMA_MODEL, temperature=0.2, max_tokens=TOKEN_LENGTH
+def get_conversational_chain():
+    vectordb = load_vectorstore("vectorstore")
+    retriever = vectordb.as_retriever(search_kwargs={"filter": {"document_id": "whirlpool"}})
+    memory = ConversationBufferMemory(
+        memory_key="chat_history",
+        return_messages=True,
+        input_key="question",
+        output_key="answer",
     )
-else:
-    from langchain_core.runnables import Runnable
-
-    local_llama = Runnable(lambda x: "Test response from mock model.")
-
-print("[yellow]⏳ Initialising local model...[/yellow]")
-logging.info("Loading ChatOllama model")
-local_llama = ChatOllama(model=OLLAMA_MODEL)
-print("[green]✅ Model loaded[/green]")
-
-
-class ConversationMemory:
-    def __init__(self):
-        self.history = []
-
-    def add_turn(self, role, message):
-        self.history.append(f"{role}: {message}")
-
-    def get_history(self):
-        return "\n".join(self.history)
-
-
-class HybridRetriever:
-    def __init__(self, dense_retriever, docs, k=4):
-        self.dense = dense_retriever
-        self.k = k
-        self.bm25 = BM25Retriever.from_documents(
-            [LCDocument(page_content=d.page_content, metadata=d.metadata) for d in docs]
-        )
-
-    def get_relevant_documents(self, query):
-        dense_results = self.dense.invoke(query)
-        sparse_results = self.bm25.invoke(query)
-        # Merge and deduplicate
-        combined = {doc.page_content: doc for doc in dense_results + sparse_results}
-        return list(combined.values())[: self.k]
-
-
-def build_rag_chain(docs):
-    print("[yellow]📦 Creating hybrid vector retriever...[/yellow]")
-    logging.info("Building Chroma vectorstore")
-
-    vectorstore = Chroma.from_documents(
-        documents=docs,
-        collection_name=COLLECTION_NAME,
-        embedding=OllamaEmbeddings(model=EMBED_MODEL),
-        persist_directory=PERSIST_PATH,
-    )
-    # vectorstore.persist()
-
-    dense_retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
-    retriever = HybridRetriever(dense_retriever, docs, k=6)
-
-    prompt_template = ChatPromptTemplate.from_template(
+    prompt = PromptTemplate.from_template(
         """
-    ### Assistant Thinking Log
-    First, write down what you believe the technician is trying to solve based on the {conversation}.
-    Then list 2–3 things you are confident about from the {context}.
-    Then list 1–2 things you are uncertain about and need clarification on.
-    Only then begin your final assistant reply.
+        You are a helpful assistant for diagnosing and fixing dishwashers.
+        Only answer if the user's question is clearly related to dishwashers.
+        If it's not, politely say you're only trained to help with those.
 
-    ---
+        You are a helpful assistant. Use the following context to answer the user's question.
+        Maintain the conversation history and build upon previous answers when necessary.
 
-    ### Final Response (in the usual format)
-    """
+        Context:
+        {context}
+
+        Chat History:
+        {chat_history}
+
+        Question:
+        {question}
+
+        Provide a helpful, concise answer followed by a short summary of key points.
+        """
+    )
+    logger.info("Conversational retrieval chain created.")
+    return ConversationalRetrievalChain.from_llm(
+        llm=ChatOllama(model="mistral"),
+        retriever=retriever,
+        memory=memory,
+        combine_docs_chain_kwargs={"prompt": prompt},
+        return_source_documents=True,
     )
 
-    return (
-        {
-            "context": RunnableLambda(
-                lambda x: retriever.get_relevant_documents(x["question"])
-            ),
-            "conversation": lambda x: x["conversation"],
-            "question": lambda x: x["question"],
-        }
-        | prompt_template
-        | local_llama
-        | StrOutputParser()
+def distill_answer(full_answer: str) -> str:
+    summariser_prompt = PromptTemplate.from_template(
+        """
+        You're a technician speaking to a colleague. Rewrite the assistant's verbose response as if you're replying in a live chat.
+
+        Say just two short, natural sentences:
+        - First: what's likely wrong, using plain English.
+        - Second: what to check or try first — just **one** concrete action.
+
+        Do not number anything.
+        Do not list multiple steps or checks.
+        Do not use the words \"also\", \"and then\", or \"alternatively\".
+        Do not summarize everything. Focus on just one issue and one step.
+
+        Example:
+        "Sounds like the drain pump’s jammed. Let’s check the hose for a clog first."
+
+        Assistant's full response:
+        {response}
+        """
     )
-
-
-def load_and_chunk_documents():
-    if not os.path.exists(CONTENT_FILE):
-        raise FileNotFoundError(f"Could not find file: {CONTENT_FILE}")
-
-    with open(CONTENT_FILE, "r", encoding="utf-8") as f:
-        raw_text = f.read()
-
-    print("[yellow]🧠 Performing semantic chunking...[/yellow]")
-    logging.info("Chunking document using SemanticChunker")
-
-    text_splitter = SemanticChunker(OllamaEmbeddings(model=EMBED_MODEL))
-    documents = text_splitter.create_documents([raw_text])
-
-    print(f"[green]✅ Loaded and chunked {len(documents)} documents[/green]")
-    return documents
-
+    chain = summariser_prompt | ChatOllama(model="mistral") | StrOutputParser()
+    return chain.invoke({"response": full_answer})
 
 def main():
-    print("[bold green]💬 Agentic RAG Chat Interface (Hybrid Retrieval)[/bold green]")
-    print("[dim]Type 'exit' to quit.[/dim]\n")
+    parser = argparse.ArgumentParser(description="Conversational RAG over Whirlpool vectorstore")
+    parser.add_argument("--query", type=str, help="Single user question")
+    parser.add_argument("--chat", action="store_true", help="Start interactive conversation loop")
+    parser.add_argument("--verbose", action="store_true", help="Show full assistant output")
+    args = parser.parse_args()
 
-    memory = ConversationMemory()
-    documents = load_and_chunk_documents()
-    chain = build_rag_chain(documents)
+    chain = get_conversational_chain()
 
-    while True:
-        query = input("[bold cyan]Technician:[/bold cyan] ").strip()
-        if query.lower() in ["exit", "quit"]:
-            print("[italic]👋 Goodbye![/italic]")
-            break
-
-        memory.add_turn("Technician", query)
-        conversation_input = {
-            "question": query,
-            "conversation": memory.get_history(),
-        }
-
-        print("[yellow]🧠 Thinking...[/yellow]")
+    def respond(question):
+        logger.info("User question: %s", question)
         start = time.time()
-        try:
-            response = chain.invoke(conversation_input)
-        except Exception as e:
-            logging.error("Inference error: %s", str(e))
-            print(f"[red]❌ Error: {e}[/red]")
-            continue
-        end = time.time()
+        result = chain.invoke({"question": question})
+        elapsed = time.time() - start
+        logger.info("Chain response time: %.2fs", elapsed)
 
-        print(f"[bold magenta]AI Assistant:[/bold magenta] {response}\n")
-        print(f"[dim]⏱️ Response time: {end - start:.2f}s[/dim]")
+        docs = result.get("source_documents", [])
+        retrieved_text = " ".join(doc.page_content.lower() for doc in docs)
+        question_terms = set(question.lower().split())
+        match_score = sum(1 for word in question_terms if word in retrieved_text)
 
-        memory.add_turn("AI Assistant", response)
+        logger.info("Match score: %s", match_score)
 
+        if match_score < 2:
+            fallback_msg = "Sorry, I couldn’t find anything in our Whirlpool manuals related to that."
+            logger.info("Fallback response returned due to low match score")
+            return fallback_msg
+
+        final_answer = result["answer"] if args.verbose else distill_answer(result["answer"])
+        logger.info("Final assistant response: %s", final_answer)
+        return final_answer
+
+    if args.chat:
+        logger.info("Interactive chat mode started")
+        print("=== Assistant Chat Mode === (Press Ctrl+C or type 'exit' to quit)")
+        print("Assistant: Hi! I'm here to help with Whirlpool dishwashers. What’s the issue?")
+        while True:
+            try:
+                q = input("[You]: ").strip()
+                if q.lower() in {"exit", "quit"}:
+                    logger.info("Session ended by user.")
+                    print("Exiting chat. Goodbye!")
+                    break
+                response = respond(q)
+                print("[Assistant]: ", response)
+            except KeyboardInterrupt:
+                logger.info("Session interrupted by user.")
+                print("Exiting chat. Goodbye!")
+                break
+    elif args.query:
+        logger.info("Single-query mode triggered: %s", args.query)
+        print(f"[Assistant]: {respond(args.query)}")
+    else:
+        logger.warning("No query or chat flag provided.")
+        print(f"Please provide either --query or --chat.")
 
 if __name__ == "__main__":
     main()
