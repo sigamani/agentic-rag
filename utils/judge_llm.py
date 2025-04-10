@@ -7,6 +7,7 @@ from langchain_core.runnables import Runnable
 import json
 import re
 
+
 # Define the structured output format
 class EvaluationResult(BaseModel):
     score: float
@@ -70,33 +71,43 @@ def _run_eval(prompt_template: str, variables: Dict) -> Dict:
     try:
         # Find score using regex
         score_match = re.search(r'"score"\s*:\s*(\d+(\.\d+)?)', response)
-        explanation_match = re.search(r'"explanation"\s*:\s*"([^"]+)"', response, re.DOTALL)
+        explanation_match = re.search(
+            r'"explanation"\s*:\s*"([^"]+)"', response, re.DOTALL
+        )
 
         if score_match and explanation_match:
             return {
                 "score": float(score_match.group(1)),
-                "explanation": explanation_match.group(1)
+                "explanation": explanation_match.group(1),
             }
 
         raise ValueError("Could not parse fallback judge output.")
     except Exception as e:
-        print("❌ Failed to parse judge response as JSON or fallback format:\n", response)
+        print(
+            "❌ Failed to parse judge response as JSON or fallback format:\n", response
+        )
         raise e
 
 
 def judge_accuracy(question: str, response: str, ground_truth: str) -> float:
-    result = _run_eval(judge_accuracy_prompt, {
-        "question": question,
-        "response": response,
-        "ground_truth": ground_truth,
-    })
+    result = _run_eval(
+        judge_accuracy_prompt,
+        {
+            "question": question,
+            "response": response,
+            "ground_truth": ground_truth,
+        },
+    )
     return result["score"]
 
 
 def judge_coherence(context: str, question: str, response: str) -> float:
-    result = _run_eval(judge_coherence_prompt, {
-        "context": context,
-        "question": question,
-        "response": response,
-    })
+    result = _run_eval(
+        judge_coherence_prompt,
+        {
+            "context": context,
+            "question": question,
+            "response": response,
+        },
+    )
     return result["score"]
