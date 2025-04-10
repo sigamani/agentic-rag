@@ -1,7 +1,7 @@
 import os
 
-CHAT_MODEL = "llama3.3:latest"
-EMBED_MODEL = "mxbai-embed-large"
+CHAT_MODEL = "mistral"
+EMBED_MODEL = "nomic-embed-text"
 TOKEN_LENGTH = 500
 
 DATA_DIR = "data"

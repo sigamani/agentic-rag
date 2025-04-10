@@ -1,7 +1,7 @@
 import os
 from rich import print
 from langchain.schema import Document
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 from langchain_ollama import OllamaEmbeddings
 from constants import EMBED_MODEL, CHROMA_DB_DIR, COLLECTION_NAME
 
