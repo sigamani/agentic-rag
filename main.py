@@ -1,65 +1,64 @@
-# chat_graph.py
-
-from langgraph.graph import StateGraph, START, END
-from pydantic import BaseModel, Field
-from typing import List, Optional
-
-from langchain.schema import Document
-from embedder import embed_documents
-from retrieval import get_retriever
-from rag_chain import build_chain
-
-# --- Chat State ---
-class ChatState(BaseModel):
-    question: str
-    conversation: str = ""
-    answer: Optional[str] = None
-
-# --- LangGraph nodes ---
-from langchain_core.runnables import Runnable
+import argparse
+from langchain_community.vectorstores import Chroma
+from langchain_ollama import OllamaEmbeddings, ChatOllama
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import PromptTemplate
+from langchain.memory import ConversationBufferMemory
+from langchain.chains import ConversationalRetrievalChain
 
 
-class RAGAnswerNode(Runnable):
-    def __init__(self, retriever):
-        self.chain = build_chain(retriever)
+def load_vectorstore(persist_dir: str):
+    embedder = OllamaEmbeddings(model="nomic-embed-text")
+    return Chroma(persist_directory=persist_dir, embedding_function=embedder)
 
-    def invoke(self, input: ChatState, config=None, **kwargs) -> ChatState:
-        output = self.chain.invoke({
-            "question": input.question,
-            "conversation": input.conversation
-        })
-        return ChatState(
-            question=input.question,
-            conversation=input.conversation + "\n" + output,
-            answer=output
-        )
+
+def get_conversational_chain():
+    vectordb = load_vectorstore("vectorstore")
+    retriever = vectordb.as_retriever(search_kwargs={"filter": {"document_id": "whirlpool"}})
+
+    memory = ConversationBufferMemory(
+        memory_key="chat_history", return_messages=True, input_key="question"
+    )
+
+    prompt = PromptTemplate.from_template(
+        """
+        You are a helpful assistant. Use the following context to answer the user's question.
+        Maintain the conversation history and build upon previous answers when necessary.
+
+        Context:
+        {context}
+
+        Chat History:
+        {chat_history}
+
+        Question:
+        {question}
+
+        Provide a helpful, concise answer followed by a short summary of key points.
+        """
+    )
+
+    chain = ConversationalRetrievalChain.from_llm(
+        llm=ChatOllama(model="mistral"),
+        retriever=retriever,
+        memory=memory,
+        combine_docs_chain_kwargs={"prompt": prompt},
+        return_source_documents=True
+    )
+    return chain
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Conversational RAG over Whirlpool vectorstore")
+    parser.add_argument("--query", type=str, required=True, help="Your user question")
+    args = parser.parse_args()
+
+    chain = get_conversational_chain()
+    result = chain.invoke({"question": args.query})
+
+    print("\n=== Assistant ===")
+    print(result["answer"])
+
 
 if __name__ == "__main__":
-    chroma_dir = "data/chromadb"
-
-#    print("📦 Loading persisted Chroma vector store...")
-    vectordb = embed_documents("data2/whirlpool_chunks.jsonl", overwrite=False)  # Use existing DB without re-embedding
-
-    print("🔍 Reconstructing hybrid retriever from vector store...")
-    dense_docs = vectordb.similarity_search("*", k=1000)
-    retriever = get_retriever("hybrid", dense_docs, vectordb)
-
-    builder = StateGraph(ChatState)
-    builder.add_node("rag", RAGAnswerNode(retriever))
-
-    builder.add_edge(START, "rag")
-    builder.add_edge("rag", END)
-    graph = builder.compile()
-
-    print("🤖 Whirlpool assistant ready. Type 'exit' to quit.")
-    conversation = ""
-
-    while True:
-        question = input("\n🔎 Question: ")
-        if question.lower() in ["exit", "quit"]:
-            break
-        state = ChatState(question=question, conversation=conversation)
-        result = graph.invoke(state)
-        print("\n🧠 Answer:", result['answer'])
-        conversation = result["conversation"]
-
+    main()
