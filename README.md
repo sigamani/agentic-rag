@@ -1,3 +1,4 @@
+
 # 🧠 Whirlpool RAG Assistant (Multimodal-Aware)
 
 This repo implements a document-grounded conversational RAG assistant for Whirlpool dishwasher troubleshooting, built with LangChain, Chroma, and Ollama (Mistral). It optionally parses and grounds from structured PDFs with diagrams and tables using Gemini 1.5 Flash.
@@ -102,3 +103,40 @@ python main.py --query "What does the E4.1 code mean?"
 ```
 
 Logs and outputs will be saved to `main.log`.
+
+---
+
+---
+
+## 🧪 Testing & CI Status
+
+- 🚫 This repo **does not currently include unit tests**
+- ⚠️ The CI/CD pipeline is **not functioning** — no automated build, test, or deployment setup is active
+- ✅ These components are planned in the future as the codebase stabilizes and interface contracts are formalized
+
+---
+
+## 📊 Retrieval & Benchmarking Notes
+
+The current live assistant uses:
+```python
+retriever = vectordb.as_retriever(search_kwargs={"filter": {"document_id": "whirlpool"}})
+```
+This is a **pure dense retriever** using semantic search over Chroma — not the hybrid version.
+
+However, hybrid retrieval was tested and benchmarked using LangSmith, and the results are available here:  
+🔗 [Benchmark results (LangSmith logs)](https://github.com/sigamani/agentic-rag/tree/main/logs/hybrid/semantic/mistral_all-minilm/structured_reasoning_v1)
+
+---
+
+## 🔍 Chunking Methods Tested
+
+During experimentation, multiple chunking techniques were evaluated:
+
+- `AgenticChunker`: uses role-structured or layout-aware segmentation
+- `AgenticGraphChunker`: combines document structure + section links
+- `SemanticChunker`: based on cosine similarity and embedding cohesion
+
+Despite the advanced graph and multimodal-aware chunkers, **semantic chunking with cosine similarity** performed **just as well** in terms of retrieval precision and generation quality when paired with extracted multimodal descriptions.
+
+These findings shaped the current design toward simplicity, performance, and reproducibility.
