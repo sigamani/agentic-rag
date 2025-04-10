@@ -10,8 +10,10 @@ ENCODING = "gpt2"
 
 enc = tiktoken.get_encoding(ENCODING)
 
+
 def count_tokens(text: str) -> int:
     return len(enc.encode(text))
+
 
 def split_with_llm(text: str, page: int = None, title: str = None) -> List[Dict]:
     system_prompt = (
@@ -34,14 +36,16 @@ def split_with_llm(text: str, page: int = None, title: str = None) -> List[Dict]
     chunks = []
     for line in response.strip().split("\n"):
         if line.strip() and line[0].isdigit():
-            content = line.split('.', 1)[-1].strip()
+            content = line.split(".", 1)[-1].strip()
             if count_tokens(content) <= MAX_CHUNK_TOKENS:
-                chunks.append({
-                    "text": content,
-                    "metadata": {
-                        "source_page": page,
-                        "source_title": title,
-                        "source_paragraph": text
+                chunks.append(
+                    {
+                        "text": content,
+                        "metadata": {
+                            "source_page": page,
+                            "source_title": title,
+                            "source_paragraph": text,
+                        },
                     }
-                })
+                )
     return chunks

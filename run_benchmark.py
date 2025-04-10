@@ -6,31 +6,42 @@ from rich import print
 from statistics import mean, quantiles
 
 from main import build_rag_chain, load_and_chunk_documents, ConversationMemory
-from utils.judge_llm import judge_accuracy, judge_coherence  # scoring logic for accuracy & coherence
+from utils.judge_llm import (
+    judge_accuracy,
+    judge_coherence,
+)  # scoring logic for accuracy & coherence
 
 try:
     from langsmith import traceable
 except ImportError:
+
     def traceable(*args, **kwargs):
         def decorator(fn):
             return fn
+
         return decorator
+
 
 @traceable(name="Agentic RAG Benchmark Run")
 def run_query(chain, conversation_input):
     return chain.invoke(conversation_input)
 
+
 def load_benchmark(path):
     with open(path, "r") as f:
         return [json.loads(line) for line in f]
+
 
 def measure_metrics(response, expected_keywords):
     response_lower = response.lower()
     matched_keywords = [kw for kw in expected_keywords if kw.lower() in response_lower]
     return {
         "token_count": len(response.split()),
-        "retrieval_accuracy": len(matched_keywords) / len(expected_keywords) if expected_keywords else 0.0,
+        "retrieval_accuracy": (
+            len(matched_keywords) / len(expected_keywords) if expected_keywords else 0.0
+        ),
     }
+
 
 def save_results_to_log(results, config):
     os.makedirs(config["log_dir"], exist_ok=True)
@@ -42,6 +53,7 @@ def save_results_to_log(results, config):
             json.dump(result, f, indent=2)
             f.write("\n")
     print(f"💾 Saving benchmark log to {path}")
+
 
 def run_benchmark(benchmark_file, langsmith=False, evaluate=False):
     print("[yellow]📊 Loading benchmark file...[/yellow]")
@@ -75,7 +87,11 @@ def run_benchmark(benchmark_file, langsmith=False, evaluate=False):
 
         print(f"[bold green]⏱️ Running query {i + 1}/{len(examples)}...[/bold green]")
         start = time.time()
-        response = run_query(chain, conversation_input) if langsmith else chain.invoke(conversation_input)
+        response = (
+            run_query(chain, conversation_input)
+            if langsmith
+            else chain.invoke(conversation_input)
+        )
         end = time.time()
 
         latency = end - start
@@ -92,21 +108,25 @@ def run_benchmark(benchmark_file, langsmith=False, evaluate=False):
                 coherence_score = judge_coherence(conversation, question, response)
         print(f"[cyan]Question:[/cyan] {question}")
         print(f"[magenta]Response:[/magenta] {response}")
-        print(f"[dim]Latency: {latency:.2f}s | Tokens: {metrics['token_count']} | Retrieval Accuracy: {metrics['retrieval_accuracy']:.2f}[/dim]")
+        print(
+            f"[dim]Latency: {latency:.2f}s | Tokens: {metrics['token_count']} | Retrieval Accuracy: {metrics['retrieval_accuracy']:.2f}[/dim]"
+        )
         if accuracy_score is not None:
             print(f"[bold blue]Judge Accuracy:[/bold blue] {accuracy_score:.2f}")
         if coherence_score is not None:
             print(f"[bold blue]Context Coherence:[/bold blue] {coherence_score:.2f}\n")
 
-        results.append({
-            "latency": latency,
-            "token_count": metrics["token_count"],
-            "retrieval_accuracy": metrics["retrieval_accuracy"],
-            "accuracy_score": accuracy_score,
-            "coherence_score": coherence_score,
-            "response": response,
-            "question": question,
-        })
+        results.append(
+            {
+                "latency": latency,
+                "token_count": metrics["token_count"],
+                "retrieval_accuracy": metrics["retrieval_accuracy"],
+                "accuracy_score": accuracy_score,
+                "coherence_score": coherence_score,
+                "response": response,
+                "question": question,
+            }
+        )
         latency_scores.append(latency)
 
     print("[bold yellow]📈 Benchmark Summary:[/bold yellow]")
@@ -118,12 +138,20 @@ def run_benchmark(benchmark_file, langsmith=False, evaluate=False):
     }
     save_results_to_log(results, config)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--benchmark_file", type=str, default="data/benchmark_unified.jsonl")
-    parser.add_argument("--langsmith", action="store_true", help="Enable LangSmith traces")
-    parser.add_argument("--evaluate", action="store_true", help="Use judge LLM to score accuracy and coherence")
+    parser.add_argument(
+        "--benchmark_file", type=str, default="data/benchmark_unified.jsonl"
+    )
+    parser.add_argument(
+        "--langsmith", action="store_true", help="Enable LangSmith traces"
+    )
+    parser.add_argument(
+        "--evaluate",
+        action="store_true",
+        help="Use judge LLM to score accuracy and coherence",
+    )
     args = parser.parse_args()
 
     run_benchmark(args.benchmark_file, langsmith=args.langsmith, evaluate=args.evaluate)
-

@@ -9,8 +9,10 @@ from datetime import datetime
 PDF_PATH = "data/whirlpool.pdf"
 OUTPUT_PATH = "data/structure_chunks.jsonl"
 
+
 def log(msg):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+
 
 def parse_pdf_to_jsonl(pdf_path: str, output_path: str):
     chunker = StructureAwareChunker()
@@ -24,12 +26,9 @@ def parse_pdf_to_jsonl(pdf_path: str, output_path: str):
             if not text.strip():
                 continue
             try:
-                docs = chunker.chunk(text, page=i+1, title=f"Page {i+1}")
+                docs = chunker.chunk(text, page=i + 1, title=f"Page {i+1}")
                 for d in docs:
-                    json.dump({
-                        "text": d.page_content,
-                        "metadata": d.metadata
-                    }, out)
+                    json.dump({"text": d.page_content, "metadata": d.metadata}, out)
                     out.write("\n")
                 total_chunks += len(docs)
             except Exception as e:
@@ -37,6 +36,7 @@ def parse_pdf_to_jsonl(pdf_path: str, output_path: str):
 
     log(f"✅ Done. Total chunks: {total_chunks}")
     log(f"Output written to {output_path}")
+
 
 if __name__ == "__main__":
     start = time()

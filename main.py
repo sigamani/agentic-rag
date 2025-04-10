@@ -28,9 +28,12 @@ PERSIST_PATH = "data/chroma_db"
 TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
 
 if not TEST_MODE:
-    local_llama = ChatOllama(model=OLLAMA_MODEL, temperature=0.2, max_tokens=TOKEN_LENGTH)
+    local_llama = ChatOllama(
+        model=OLLAMA_MODEL, temperature=0.2, max_tokens=TOKEN_LENGTH
+    )
 else:
     from langchain_core.runnables import Runnable
+
     local_llama = Runnable(lambda x: "Test response from mock model.")
 
 print("[yellow]⏳ Initialising local model...[/yellow]")
@@ -63,7 +66,7 @@ class HybridRetriever:
         sparse_results = self.bm25.invoke(query)
         # Merge and deduplicate
         combined = {doc.page_content: doc for doc in dense_results + sparse_results}
-        return list(combined.values())[:self.k]
+        return list(combined.values())[: self.k]
 
 
 def build_rag_chain(docs):
@@ -76,12 +79,13 @@ def build_rag_chain(docs):
         embedding=OllamaEmbeddings(model=EMBED_MODEL),
         persist_directory=PERSIST_PATH,
     )
-    #vectorstore.persist()
+    # vectorstore.persist()
 
     dense_retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
     retriever = HybridRetriever(dense_retriever, docs, k=6)
 
-    prompt_template = ChatPromptTemplate.from_template("""
+    prompt_template = ChatPromptTemplate.from_template(
+        """
     ### Assistant Thinking Log
     First, write down what you believe the technician is trying to solve based on the {conversation}.
     Then list 2–3 things you are confident about from the {context}.
@@ -94,10 +98,11 @@ def build_rag_chain(docs):
     """
     )
 
-
     return (
         {
-            "context": RunnableLambda(lambda x: retriever.get_relevant_documents(x["question"])),
+            "context": RunnableLambda(
+                lambda x: retriever.get_relevant_documents(x["question"])
+            ),
             "conversation": lambda x: x["conversation"],
             "question": lambda x: x["question"],
         }

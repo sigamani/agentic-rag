@@ -1,4 +1,3 @@
-
 import tiktoken
 import json
 import re
@@ -18,11 +17,14 @@ FAILURE_LOG = "data/failures.jsonl"
 
 enc = tiktoken.get_encoding(ENCODING)
 
+
 def count_tokens(text: str) -> int:
     return len(enc.encode(text))
 
+
 def log(msg):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+
 
 def safe_json_load(text: str, page: int) -> List[Dict]:
     Path(DEBUG_LOG_DIR).mkdir(parents=True, exist_ok=True)
@@ -42,13 +44,10 @@ def safe_json_load(text: str, page: int) -> List[Dict]:
         except json.JSONDecodeError as e2:
             log(f"[Final Fail] Still invalid JSON: {e2}")
             with open(FAILURE_LOG, "a") as f:
-                json.dump({
-                    "page": page,
-                    "error": str(e2),
-                    "raw": cleaned[:1000]
-                }, f)
+                json.dump({"page": page, "error": str(e2), "raw": cleaned[:1000]}, f)
                 f.write("\n")
             return []
+
 
 class StructureAwareChunker:
     def __init__(self, model_name=MODEL, debug=False):
@@ -71,7 +70,8 @@ Example:
 ]
 """
 
-        prompt_template = PromptTemplate.from_template("""
+        prompt_template = PromptTemplate.from_template(
+            """
 You are an expert document analyst and structured information extractor.
 
 Given a raw technical manual section, split it into clean, sentence-complete chunks (≤ 256 tokens) and enrich each with metadata.
@@ -88,9 +88,12 @@ Respond strictly in this JSON format:
 
 Section:
 {text}
-""")
+"""
+        )
 
-        response = self.llm.invoke(prompt_template.format(text=text, few_shot=few_shot_example, title=title)).content
+        response = self.llm.invoke(
+            prompt_template.format(text=text, few_shot=few_shot_example, title=title)
+        ).content
         parsed_blocks = safe_json_load(response, page)
 
         results = []
@@ -108,8 +111,8 @@ Section:
                     "category": parts.get("category", "Unclassified"),
                     "source_page": page,
                     "source_title": title,
-                    "source_paragraph": text
-                }
+                    "source_paragraph": text,
+                },
             )
 
             if self.debug:
