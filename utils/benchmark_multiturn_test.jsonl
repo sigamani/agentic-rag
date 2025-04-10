@@ -1,0 +1,152 @@
+{
+  "inputs": {
+    "question": "I’m having trouble with a Model 18 ADA dishwasher. It’s showing an error code E4 and isn’t draining.",
+    "conversation": ""
+  },
+  "outputs": {
+    "answer": "Check the drain hose for blockages or kinks."
+  },
+  "metadata": {
+    "expected_sources": [
+      "whirlpool_local",
+      "whirlpool_online"
+    ],
+    "expected_keywords": [
+      "drain",
+      "E4",
+      "hose"
+    ]
+  }
+}
+{
+  "inputs": {
+    "question": "I’ve checked the hose and it’s clear.",
+    "conversation": "Technician: I’m having trouble with a Model 18 ADA dishwasher. It’s showing an error code E4 and isn’t draining.\nTechnician: I’ve checked the hose and it’s clear."
+  },
+  "outputs": {
+    "answer": "Next, check the drain pump for debris or damage."
+  },
+  "metadata": {
+    "expected_sources": [
+      "whirlpool_online"
+    ],
+    "expected_keywords": [
+      "next step",
+      "drain pump"
+    ]
+  }
+}
+{
+  "inputs": {
+    "question": "There’s some debris in the pump. I’ve cleaned it.",
+    "conversation": "Technician: I’m having trouble with a Model 18 ADA dishwasher. It’s showing an error code E4 and isn’t draining.\nTechnician: I’ve checked the hose and it’s clear.\nTechnician: There’s some debris in the pump. I’ve cleaned it."
+  },
+  "outputs": {
+    "answer": "Run a short cycle to confirm the issue is resolved."
+  },
+  "metadata": {
+    "expected_sources": [
+      "whirlpool_online"
+    ],
+    "expected_keywords": [
+      "cycle",
+      "resolved"
+    ]
+  }
+}
+{
+  "inputs": {
+    "question": "What does E4.1 mean on a Tesla dishwasher?",
+    "conversation": ""
+  },
+  "outputs": {
+    "answer": "E4.1 typically indicates an overflow issue caused by water reaching the base of the dishwasher."
+  },
+  "metadata": {
+    "expected_sources": [
+      "tesla_wd461"
+    ],
+    "expected_keywords": [
+      "E4.1",
+      "overflow",
+      "base"
+    ]
+  }
+}
+{
+  "inputs": {
+    "question": "How do I run diagnostics on an LG dishwasher?",
+    "conversation": ""
+  },
+  "outputs": {
+    "answer": "Hold the start and delay buttons simultaneously to enter diagnostic mode."
+  },
+  "metadata": {
+    "expected_sources": [
+      "lg_owner_manual"
+    ],
+    "expected_keywords": [
+      "diagnostic",
+      "start",
+      "delay"
+    ]
+  }
+}
+{
+  "inputs": {
+    "question": "How should I load cutlery in a Miele G6100 dishwasher?",
+    "conversation": ""
+  },
+  "outputs": {
+    "answer": "Place the cutlery on the top rack, with handles down for thorough cleaning."
+  },
+  "metadata": {
+    "expected_sources": [
+      "miele_g6100"
+    ],
+    "expected_keywords": [
+      "cutlery",
+      "top rack",
+      "loading"
+    ]
+  }
+}
+{
+  "inputs": {
+    "question": "It works now! Thanks.",
+    "conversation": "Technician: I’m having trouble with a Model 18 ADA dishwasher. It’s showing an error code E4 and isn’t draining.\nTechnician: I’ve checked the hose and it’s clear.\nTechnician: There’s some debris in the pump. I’ve cleaned it."
+  },
+  "outputs": {
+    "answer": "Glad to hear it's working now. Let me know if anything else comes up."
+  },
+  "metadata": {
+    "expected_sources": [
+      "whirlpool_local",
+      "whirlpool_online"
+    ],
+    "expected_keywords": [
+      "drain",
+      "pump",
+      "resolved"
+    ]
+  }
+}
+{
+  "inputs": {
+    "question": "It doesn’t seem to be starting the test.",
+    "conversation": "Technician: How do I run diagnostics on an LG dishwasher?\nTechnician: Do I need to press anything else after that?"
+  },
+  "outputs": {
+    "answer": "Hold the start and delay buttons together until the display flashes."
+  },
+  "metadata": {
+    "expected_sources": [
+      "lg_owner_manual"
+    ],
+    "expected_keywords": [
+      "diagnostic",
+      "start button",
+      "test mode"
+    ]
+  }
+}
