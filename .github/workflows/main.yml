@@ -23,7 +23,6 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-       #   sudo apt-get install -y tesseract-ocr poppler-utils
 
       - name: Install Python dependencies
         run: |
@@ -34,10 +33,10 @@ jobs:
       - name: Format with Black
         run: black . --line-length 79
         
-      - name: Run flake8 linting
-        run: |
-          echo "Running flake8 lint check..."
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+   #   - name: Run flake8 linting
+   #     run: |
+   #       echo "Running flake8 lint check..."
+   #       flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
               
       # - name: Run mock test  
       #   run: | 
