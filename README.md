@@ -1,56 +1,69 @@
-# Agentic RAG Strategy for Troubleshooting Assistant
+# 🧠 Whirlpool RAG Assistant (Multimodal-Aware)
 
-This document outlines the strategy for implementing a context-aware, low-latency, accurate Retrieval-Augmented Generation (RAG) assistant for technical troubleshooting. The solution leverages local LLM inference, Ray-distributed chunking, LangSmith evaluation, and Weights & Biases observability.
-
-## 🔧 Installation
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/yourusername/agentic-rag.git
-cd agentic-rag
-```
-
-### 2. Set Up Virtual Environment (Optional but Recommended)
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-### 3. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Make Sure You Have These Installed:
-- `ollama` (for running `mistral` and `nomic-embed-text` locally)
-- `tesseract` (for PDF parsing, e.g. `brew install tesseract` on macOS)
-
-## 🚀 Running the App
-
-You can run a semantic RAG query like this:
-
-```bash
-python run_agent.py --query "I’m having trouble with a Model 18 ADA dishwasher. It’s showing an error code E4 and the customer is complaining is it not draining"
-```
-
-You can also provide prior context to simulate a running conversation:
-
-```bash
-python run_agent.py --query "I’ve accessed the pump. There’s some debris here. I’ll clean it out and see if that fixes the issue"
-```
-
-## 📁 Folder Structure
-
-- `run_agent.py` — main entry point for your assistant
-- `data/content.txt` — the reference manual used for retrieval
-- `utils/agentic_chunker.py` — utility for custom chunking (if used)
-
-## 🧠 Model Notes
-
-- Embedding model: `nomic-embed-text` via Ollama
-- Language model: `mistral` via Ollama
-- Uses LangChain's `SemanticChunker` for document splitting
+This repo implements a document-grounded conversational RAG assistant for Whirlpool dishwasher troubleshooting, built with LangChain, Chroma, and Ollama (Mistral). It optionally parses and grounds from structured PDFs with diagrams and tables using Gemini 1.5 Flash.
 
 ---
 
-Happy troubleshooting! 🔧🤖
+## ✅ What This Assistant Does
+
+- Loads a persistent vectorstore of embedded Whirlpool manual chunks
+- Supports both **CLI chat** and **single-query** modes
+- Uses `document_id` filtering for scoped retrieval (Whirlpool-only)
+- Stores and filters on `section_title` for source grounding
+- Generates responses using **Mistral (Ollama)** with optional summarisation
+- Extracts structured documents using **Gemini 1.5 Flash** (text, tables, images)
+- Keeps logs of all interactions, latency, and fallback decisions
+
+---
+
+## 🔍 Prompting & Design Rationale
+
+Prompts are structured to:
+- Enforce task alignment (dishwasher only)
+- Use multi-turn chat history
+- Minimise hallucinations
+- Summarise with a distillation prompt (2 sentences, actionable)
+
+Retrieval match is scored simply via token overlap and fallback responses are triggered if low match is detected.
+
+---
+
+## 💡 Known Limitations
+
+- ❌ No multimodal retriever interface (images extracted but unused at runtime)
+- ❌ Retrieval match scoring is naive (non-semantic)
+- ❌ Summarisation not cached (redundant compute)
+- ❌ Chroma has scaling limits — Pinecone planned for production
+- ❌ No use of section filtering yet, despite indexing
+- ❌ No prompt injection protection
+
+---
+
+## 🔧 Future Enhancements
+
+- 🖼️ **Multimodal interface**: use retrieved diagrams and annotated screenshots
+- 🌲 **Pinecone migration**: scalable, production-ready vector infra
+- 🤖 **LangGraph agent orchestration**: stateful flows, LangSmith logging
+- 🧪 **RAG benchmark integration**: judge LLM scoring, hybrid ablations
+- 📚 **Section-aware responses**: “See Section X (Page Y)...” style
+
+---
+
+## 🧰 Core Stack
+
+| Component     | Role                                              |
+|---------------|---------------------------------------------------|
+| LangChain     | Chain management, memory, retrieval abstractions  |
+| Ollama + Mistral | Fast local generation and summarisation       |
+| ChromaDB      | Local persistent vector store                     |
+| Gemini Flash  | PDF → structured text & table extraction          |
+| LangGraph     | Used for document-agent workflows                 |
+| HybridRetriever | Optional BM25 + dense fusion for better recall |
+
+---
+
+## ✅ Why This Works
+
+This agent handles technical queries like "E4.1 error" and "filter not draining" with grounded, document-scoped responses. It integrates prompt safety, source metadata, and hybrid-ready architecture — ideal for scaling into an enterprise-grade troubleshooting assistant.
+
+
