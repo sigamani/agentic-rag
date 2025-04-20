@@ -1,17 +1,25 @@
-# Ollama
-from langfuse.openai import OpenAI
+from langchain_community.chat_models import ChatTogether
 import os
-import dotenv
+from langsmith import traceable
 
-dotenv.load_dotenv()
+# Hardcoded Together AI configuration
+LLM_API_KEY = "f2ca76b85d77e125667559d3bbb282901dbb80d89af2f9831e6de303a532a2f0"
+LLM_API_BASE = "https://api.together.xyz/v1"
+LLM_MODEL = "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"
 
-# We're using OpenAI API compatible format, so we can use OpenAI SDK to interact with our LLM
-LLM_API_KEY = os.getenv("LLM_API_KEY", "API_KEY")
-LLM_API_BASE = os.getenv("LLM_API_BASE", "http://localhost:8000/v1")
-MODEL_NAME = os.getenv("LLM_MODEL", "llama3.1")
-llm = OpenAI(api_key=LLM_API_KEY, base_url=LLM_API_BASE)
+llm = ChatTogether(
+    model=LLM_MODEL,
+    together_api_key=LLM_API_KEY,
+    base_url=LLM_API_BASE,
+    temperature=0
+)
 
 if __name__ == "__main__":
-    out = llm.completions.create(model=MODEL_NAME, prompt="Hello World", max_tokens=10)
+    from langchain_core.messages import HumanMessage
 
-    print(out)
+    @traceable(name="LLM test call")
+    def call_llm(prompt: str):
+        return llm.invoke([HumanMessage(content=prompt)])
+
+    output = call_llm("Hello World")
+    print(output.content)
