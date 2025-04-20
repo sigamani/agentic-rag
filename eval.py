@@ -1,44 +1,50 @@
-from datetime import datetime
-import csv
+import os
 import time
+import csv
 import dotenv
 import pandas as pd
 from tqdm.auto import tqdm
+from datetime import datetime
 from langsmith import Client
-from langsmith import traceable
+from langsmith.run_helpers import traceable
 from langchain_core.messages import HumanMessage
+
 from config import DATA_LIMIT_EVAL, LANGFUSE_DATASET_NAME, GraphConfig
-from utils import typed_dict_to_dict, format_prompt
-from prompts import eval_prompt_template
-from llm import llm, MODEL_NAME
-from nodes import CHEATING_RETRIEVAL, DISABLE_GENERATION
 from graph import graph
+from utils import typed_dict_to_dict, format_prompt
+from llm import llm, MODEL_NAME
+from prompts import eval_prompt_template
+from nodes import CHEATING_RETRIEVAL, DISABLE_GENERATION
 
 dotenv.load_dotenv()
 client = Client()
-datasets = client.list_datasets()
-dataset = next((ds for ds in datasets if ds.name == LANGFUSE_DATASET_NAME), None)
-if dataset is None:
-    raise ValueError(f"Dataset '{LANGFUSE_DATASET_NAME}' not found in LangSmith")
-examples = list(client.list_examples(dataset_id=dataset.id))[:DATA_LIMIT_EVAL]
 
+# ✅ Set your LangSmith project name
+project_name = "convfinqa-eval"
+
+# 🧠 Threshold for correctness
 HIGH_CORRECTNESS_THRESHOLD = 0.9
 
-def relative_score(a, b, power=2) -> float:
+# ✅ Fetch dataset from LangSmith
+datasets = client.list_datasets()
+dataset = next(ds for ds in datasets if ds.name == LANGFUSE_DATASET_NAME)
+examples = list(client.list_examples(dataset_id=dataset.id))[:DATA_LIMIT_EVAL]
+
+def relative_score(a, b, power=2):
     if a == b:
         return 1.0
     return 1 - ((abs(a - b) / max(abs(a), abs(b))) ** power)
 
-def retrieval_precision_score(predicted: list[str], expected: str) -> float:
+def retrieval_precision_score(predicted, expected):
     try:
         return float(expected in predicted) / len(predicted)
     except ZeroDivisionError:
-        return 0
+        return 0.0
 
-def retrieval_recall_score(predicted: list[str], expected: str) -> float:
+def retrieval_recall_score(predicted, expected):
     return float(expected in predicted)
 
-def correctness_score(input: str, predicted: str, expected: str):
+def correctness_score(input_q, predicted, expected):
     if DISABLE_GENERATION:
         return None
 
@@ -47,108 +53,79 @@ def correctness_score(input: str, predicted: str, expected: str):
 
     if predicted == "" and expected != "":
         return 0
-    if predicted != "" and expected == "":
-        return None
     if predicted == expected:
         return 1
 
     try:
-        expected_parsed = float(expected.replace('%', 'e-2').replace("$", "").replace(",", "").replace(" ", ""))
-        predicted_parsed = float(predicted.replace('%', 'e-2').replace("$", "").replace(",", "").replace(" ", ""))
+        expected_parsed = float(expected.replace('%', 'e-2').replace("$", "").replace(",", ""))
+        predicted_parsed = float(predicted.replace('%', 'e-2').replace("$", "").replace(",", ""))
         return relative_score(predicted_parsed, expected_parsed)
     except Exception:
         pass
 
-    prompt = eval_prompt_template.format(question=input, actual_answer=predicted, expected_answer=expected)
+    # fallback to LLM
+    prompt = eval_prompt_template.format(question=input_q, actual_answer=predicted, expected_answer=expected)
     out = llm.invoke([HumanMessage(content=format_prompt(prompt))])
     try:
         return abs(float(out.content.strip().replace("<OUTPUT>", "").replace("</OUTPUT>", "")))
     except:
         return None
 
-def get_doc_selection_display(retrieved_doc_ids: list[str], expected_doc_id: str) -> str:
-    display = ", ".join([f"+{doc}" if doc == expected_doc_id else doc for doc in retrieved_doc_ids])
-    if expected_doc_id not in retrieved_doc_ids:
-        display += f", -{expected_doc_id}"
-    return display
-
-@traceable(name="rag-eval")
+@traceable(name="run_eval", project_name=project_name)
 def run_eval():
-    answer_correctness_scores = []
-    retrieval_precision_scores = []
-    retrieval_recall_scores = []
-    reranker_precision_scores = []
-    reranker_recall_scores = []
-    latencies = []
-    out = []
+    metrics = []
+    records = []
 
     for item in tqdm(examples):
-        inputs = {
-            "messages": [
-                HumanMessage(content=item.inputs["question"])
-            ]
-        }
+        question = item.inputs["question"]
+        expected = item.outputs["answer"]
+        expected_doc_id = item.metadata["document"]["id"]
+
+        # Format input state for LangGraph
+        inputs = {"messages": [HumanMessage(content=question)]}
 
         start = time.time()
         output = graph.invoke(inputs, config={"configurable": typed_dict_to_dict(GraphConfig)})
         latency = time.time() - start
-        latencies.append(latency)
 
-        question = item.inputs["question"]
-        expected_answer = item.outputs["answer"]
-        answer = output['answer']
-        generation = output['generation']
-
-        retrieved_doc_ids = [doc.metadata['id'] for doc in output['documents']]
-        expected_doc_id = item.metadata['document']['id']
-
-        reranked_doc_ids = [doc.metadata['id'] for doc in output['reranked_documents']]
+        answer = output["answer"]
+        generation = output.get("generation", "")
+        retrieved_doc_ids = [doc.metadata["id"] for doc in output.get("documents", [])]
+        reranked_doc_ids = [doc.metadata["id"] for doc in output.get("reranked_documents", [])]
 
         retrieval_precision = retrieval_precision_score(retrieved_doc_ids, expected_doc_id)
         retrieval_recall = retrieval_recall_score(retrieved_doc_ids, expected_doc_id)
         reranker_precision = retrieval_precision_score(reranked_doc_ids, expected_doc_id)
         reranker_recall = retrieval_recall_score(reranked_doc_ids, expected_doc_id)
+        correctness = correctness_score(question, answer, expected)
 
-        correctness = correctness_score(question, answer, expected_answer)
+        # ✅ LangSmith metric logging
+        from langsmith.run_helpers import trace
+        if trace:
+            trace.score("correctness", correctness)
+            trace.score("latency", latency)
+            trace.score("retrieval_precision", retrieval_precision)
+            trace.score("retrieval_recall", retrieval_recall)
+            trace.score("reranker_precision", reranker_precision)
+            trace.score("reranker_recall", reranker_recall)
 
-        print("=" * 50)
-        print("Question:", question)
-        print("Answer:", answer)
-        print("Expected:", expected_answer)
-        print("Correctness:", correctness)
-        print("Documents:", retrieved_doc_ids)
-        print("Reranked:", reranked_doc_ids)
-        print("Output State:", output)
-
-        out.append({
+        # Save to CSV row
+        records.append({
             "question": question,
+            "expected": expected,
             "answer": answer,
             "generation": generation,
-            "expected_answer": expected_answer,
             "correctness": correctness,
             "retrieval_precision": retrieval_precision,
             "retrieval_recall": retrieval_recall,
             "reranker_precision": reranker_precision,
             "reranker_recall": reranker_recall,
-            "prompt": output.get("prompt", ""),
             "latency": latency,
         })
 
-    out_df = pd.DataFrame.from_records(out)
-    out_df.to_csv("eval.csv", quoting=csv.QUOTE_NONNUMERIC)
-
-    correct_scores = [c for c in answer_correctness_scores if c is not None]
-    if correct_scores:
-        mean_correctness = sum(correct_scores) / len(correct_scores)
-        high_correctness_rate = sum(c > HIGH_CORRECTNESS_THRESHOLD for c in correct_scores) / len(correct_scores)
-        print(f"Average Correctness: {mean_correctness:.2%}")
-        print(f"High Correctness Rate: {high_correctness_rate:.2%}")
-
-    print(f"Mean Retrieval Precision: {sum(retrieval_precision_scores) / len(retrieval_precision_scores):.2%}")
-    print(f"Mean Retrieval Recall: {sum(retrieval_recall_scores) / len(retrieval_recall_scores):.2%}")
-    print(f"Mean Reranker Precision: {sum(reranker_precision_scores) / len(reranker_precision_scores):.2%}")
-    print(f"Mean Reranker Recall: {sum(reranker_recall_scores) / len(reranker_recall_scores):.2%}")
-    print(f"Mean Latency: {sum(latencies) / len(latencies):.2f}s")
+    df = pd.DataFrame(records)
+    df.to_csv("eval.csv", quoting=csv.QUOTE_NONNUMERIC)
+    print("✅ Evaluation complete. Results saved to eval.csv")
 
 if __name__ == "__main__":
     run_eval()
