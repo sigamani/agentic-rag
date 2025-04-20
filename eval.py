@@ -19,13 +19,10 @@ from nodes import CHEATING_RETRIEVAL, DISABLE_GENERATION
 dotenv.load_dotenv()
 client = Client()
 
-# ✅ Set your LangSmith project name
 project_name = "convfinqa-eval"
 
-# 🧠 Threshold for correctness
 HIGH_CORRECTNESS_THRESHOLD = 0.9
 
-# ✅ Fetch dataset from LangSmith
 datasets = client.list_datasets()
 dataset = next(ds for ds in datasets if ds.name == LANGFUSE_DATASET_NAME)
 examples = list(client.list_examples(dataset_id=dataset.id))[:DATA_LIMIT_EVAL]
@@ -63,7 +60,6 @@ def correctness_score(input_q, predicted, expected):
     except Exception:
         pass
 
-    # fallback to LLM
     prompt = eval_prompt_template.format(question=input_q, actual_answer=predicted, expected_answer=expected)
     out = llm.invoke([HumanMessage(content=format_prompt(prompt))])
     try:
@@ -73,7 +69,6 @@ def correctness_score(input_q, predicted, expected):
 
 @traceable(name="run_eval", project_name=project_name)
 def run_eval():
-    metrics = []
     records = []
 
     for item in tqdm(examples):
@@ -81,7 +76,6 @@ def run_eval():
         expected = item.outputs["answer"]
         expected_doc_id = item.metadata["document"]["id"]
 
-        # Format input state for LangGraph
         inputs = {"messages": [HumanMessage(content=question)]}
 
         start = time.time()
@@ -99,17 +93,15 @@ def run_eval():
         reranker_recall = retrieval_recall_score(reranked_doc_ids, expected_doc_id)
         correctness = correctness_score(question, answer, expected)
 
-        # ✅ LangSmith metric logging
-        from langsmith.run_helpers import trace
-        if trace:
-            trace.score("correctness", correctness)
-            trace.score("latency", latency)
-            trace.score("retrieval_precision", retrieval_precision)
-            trace.score("retrieval_recall", retrieval_recall)
-            trace.score("reranker_precision", reranker_precision)
-            trace.score("reranker_recall", reranker_recall)
+        run_id = os.getenv("LANGSMITH_RUN_ID")
+        if run_id:
+            client.log_metric(run_id=run_id, key="correctness", value=correctness)
+            client.log_metric(run_id=run_id, key="latency", value=latency)
+            client.log_metric(run_id=run_id, key="retrieval_precision", value=retrieval_precision)
+            client.log_metric(run_id=run_id, key="retrieval_recall", value=retrieval_recall)
+            client.log_metric(run_id=run_id, key="reranker_precision", value=reranker_precision)
+            client.log_metric(run_id=run_id, key="reranker_recall", value=reranker_recall)
 
-        # Save to CSV row
         records.append({
             "question": question,
             "expected": expected,
