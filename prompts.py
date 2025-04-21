@@ -180,33 +180,11 @@ filter_context_prompt_template = PromptTemplate(
 )
 
 
-generate_queries_prompt_template = PromptTemplate(
-    template="""
-    <INSTRUCTIONS>
-        You will be provided with a QUESTION asked by the user.
+generate_queries_prompt_template = PromptTemplate.from_template(
+    """Given this financial question, write 3 search queries that retrieve evidence to answer it.
 
-        Your task is to generate a set of precise and relevant search queries that can be used to retrieve documents from a database to answer the QUESTION.
+Question: {question}
 
-        Please ensure that the queries are comprehensive enough to cover all aspects of the QUESTION but also specific enough to filter out irrelevant information.
-
-        Only return the search queries, and nothing else. Separate each query with a newline.
-    </INSTRUCTIONS>
-    <EXAMPLE>
-         <INPUT>
-            <QUESTION>What was the total revenue for the company in the last three quarters?</QUESTION>
-        </INPUT>
-        <OUTPUT>
-            Total revenue last three quarters
-            Revenue Q1 2024
-            Revenue Q2 2024
-            Revenue Q3 2024
-            Revenue Q4 2023
-            Sum of quarterly revenue figures
-        </OUTPUT>
-    </EXAMPLE>
-    <INPUT>
-        <QUESTION>{question}</QUESTION>\n
-    </INPUT>
-    """,
-    input_variables=["question"],
+Queries:"""
 )
+

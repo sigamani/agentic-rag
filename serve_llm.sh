@@ -1,2 +1,1 @@
-HF_TOKEN=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
-vllm serve next-tat/tat-llm-13b-fft --gpu_memory_utilization 0.9 --max_model_len 48000 --enforce-eager
+ollama serve --ctx-size 4096 --batch-size 128 --n-gpu-layers 24 --threads 9 --parallel 2
