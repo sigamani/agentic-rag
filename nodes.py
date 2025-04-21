@@ -83,7 +83,7 @@ def generate_queries(state: AgentState, config: GraphConfig) -> AgentState:
         "queries": queries,
     }
 
-ef filter_context(state: AgentState, config: GraphConfig) -> AgentState:
+def filter_context(state: AgentState, config: GraphConfig) -> AgentState:
     question = state["question"]
     documents = state["reranked_documents"]
 
