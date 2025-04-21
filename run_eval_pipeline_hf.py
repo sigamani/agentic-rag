@@ -20,33 +20,47 @@ llm_model = ChatTogether(
     temperature=0
 )
 
+from prompts import generate_answer_and_program_prompt
+
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import PromptTemplate
+from langchain_together import ChatTogether  # replace with your preferred LLM
+
+# Prompt + output parser
+parser = JsonOutputParser()
+prompt = PromptTemplate.from_template(generate_answer_and_program_prompt)
+llm = ChatTogether(model="meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8", temperature=0)  # can switch to any compatible LangChain LLM
+
+def format_table_as_text(table_rows):
+    if not table_rows:
+        return "No table provided."
+    header = table_rows[0]
+    body = table_rows[1:]
+    output = ["| " + " | ".join(header) + " |", "| " + " | ".join(["---"] * len(header)) + " |"]
+    for row in body:
+        output.append("| " + " | ".join(str(x) for x in row) + " |")
+    return "\n".join(output)
 
 def generate_answer_and_program(example):
-    question = example['question']
-    table = example['table']
-    history = example.get('history', [])
+    question = example.get("qa", {}).get("question") or example.get("question") or "What is the answer?"
+    table = format_table_as_text(example.get("table", []))
 
-    # Generate program using model
-    program = llm_model.generate_program(question, table, history)
-
-    # Execute program to get final answer
-    graph = Graph(table)
-    answer = graph.execute(program)
-
-    return {
-        "answer": answer,
-        "program": program
-    }
+    formatted_prompt = prompt.format_prompt(question=question, table=table)
+    try:
+        response = llm.invoke(formatted_prompt.to_string())
+        return parser.parse(response)
+    except Exception:
+        return {"answer": "ERROR", "program": ""}
 
 def main():
-    dataset = load_dataset("TheFinAI/CONVFINQA_test_test", split="val")
+    from datasets import load_dataset
+    dataset = load_dataset("TheFinAI/CONVFINQA_test_test", split="train")
     total = len(dataset)
 
     test_size = min(1500, total)
     split_index = total - test_size
     test_dataset = dataset.select(range(split_index, total))
 
-    # Generate predictions from model
     predictions = []
     for row in test_dataset:
         generated = generate_answer_and_program(row)
@@ -56,7 +70,6 @@ def main():
             "program": generated.get("program", "")
         })
 
-    # Use same data as reference set for now (can be improved)
     references = [
         {"id": row["id"], "answer": row["answer"], "program": row.get("program", "")}
         for row in test_dataset
