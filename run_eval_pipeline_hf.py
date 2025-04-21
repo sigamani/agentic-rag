@@ -1,4 +1,3 @@
-
 import os
 import json
 import subprocess
@@ -7,7 +6,6 @@ from datetime import datetime
 from llm import LLM
 from graph import Graph
 
-# Initialize LLM once
 llm_model = LLM()
 
 def generate_answer_and_program(example):
@@ -15,27 +13,29 @@ def generate_answer_and_program(example):
     table = example['table']
     history = example.get('history', [])
 
-    # Generate program using model
-    program = llm_model.generate_program(question, table, history)
-
-    # Execute program to get final answer
-    graph = Graph(table)
-    answer = graph.execute(program)
+    try:
+        program = llm_model.generate_program(question, table, history)
+        if not program:
+            raise ValueError("No program returned")
+        graph = Graph(table)
+        answer = graph.execute(program)
+    except Exception as e:
+        program = ""
+        answer = "ERROR"
 
     return {
-        "answer": answer,
+        "answer": str(answer),
         "program": program
     }
 
 def main():
-    dataset = load_dataset("TheFinAI/CONVFINQA_test_test", split="val")
+    dataset = load_dataset("TheFinAI/CONVFINQA_test_test", split="train")
     total = len(dataset)
 
     test_size = min(1500, total)
     split_index = total - test_size
     test_dataset = dataset.select(range(split_index, total))
 
-    # Generate predictions from model
     predictions = []
     for row in test_dataset:
         generated = generate_answer_and_program(row)
@@ -45,7 +45,6 @@ def main():
             "program": generated.get("program", "")
         })
 
-    # Use same data as reference set for now (can be improved)
     references = [
         {"id": row["id"], "answer": row["answer"], "program": row.get("program", "")}
         for row in test_dataset
