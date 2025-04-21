@@ -19,7 +19,6 @@ from nodes import CHEATING_RETRIEVAL, DISABLE_GENERATION
 
 dotenv.load_dotenv()
 client = Client()
-
 run_id = str(uuid.uuid4())
 project_name = os.getenv("LANGSMITH_PROJECT")
 
@@ -60,12 +59,8 @@ def correctness_score(input_q, predicted, expected):
         return 1
 
     try:
-        expected_parsed = float(
-            expected.replace("%", "e-2").replace("$", "").replace(",", "")
-        )
-        predicted_parsed = float(
-            predicted.replace("%", "e-2").replace("$", "").replace(",", "")
-        )
+        expected_parsed = float(expected.replace("%", "e-2").replace("$", "").replace(",", ""))
+        predicted_parsed = float(predicted.replace("%", "e-2").replace("$", "").replace(",", ""))
         return relative_score(predicted_parsed, expected_parsed)
     except Exception:
         pass
@@ -75,31 +70,10 @@ def correctness_score(input_q, predicted, expected):
     )
     out = llm.invoke([HumanMessage(content=format_prompt(prompt))])
     try:
-        return abs(
-            float(out.content.strip().replace("<OUTPUT>", "").replace("</OUTPUT>", ""))
-        )
+        return abs(float(out.content.strip().replace("<OUTPUT>", "").replace("</OUTPUT>", "")))
     except:
         return None
 
-
-def execution_accuracy(predicted_program, expected_answer, exec_fn):
-    try:
-        result = exec_fn(predicted_program)  # Safely run the DSL or Python code
-        expected_val = float(
-            expected_answer.replace("%", "e-2").replace("$", "").replace(",", "")
-        )
-        return relative_score(result, expected_val)
-    except Exception as e:
-        return 0.0  # or None if you want to distinguish failures
-
-
-def program_accuracy(predicted_program, expected_program):
-    predicted = predicted_program.strip().lower()
-    expected = expected_program.strip().lower()
-    return float(predicted == expected)
-
-
-@traceable(name="run_eval", project_name=project_name)
 
 def safe_eval(expr):
     try:
@@ -107,8 +81,10 @@ def safe_eval(expr):
     except Exception:
         return None
 
+
 def program_accuracy_score(predicted_program, gold_program):
     return int(predicted_program.strip() == gold_program.strip())
+
 
 def execution_accuracy_score(predicted_program, gold_answer):
     pred_result = safe_eval(predicted_program)
@@ -117,6 +93,9 @@ def execution_accuracy_score(predicted_program, gold_answer):
     except Exception:
         gold_result = None
     return int(pred_result == gold_result if pred_result is not None and gold_result is not None else 0)
+
+
+@traceable(name="run_eval", project_name=project_name)
 def run_eval():
     records = []
 
@@ -126,62 +105,49 @@ def run_eval():
         expected_doc_id = item.metadata["document"]["id"]
 
         inputs = {"messages": [HumanMessage(content=question)]}
-
         start = time.time()
-        output = graph.invoke(
-            inputs, config={"configurable": typed_dict_to_dict(GraphConfig)}
-        )
+        output = graph.invoke(inputs, config={"configurable": typed_dict_to_dict(GraphConfig)})
         latency = time.time() - start
 
-        answer = output["answer"]
+        answer = output.get("answer", "")
         generation = output.get("generation", "")
-        retrieved_doc_ids = [doc.metadata["id"] for doc in output.get("documents", [])]
-        reranked_doc_ids = [
-            doc.metadata["id"] for doc in output.get("reranked_documents", [])
-        ]
+        predicted_program = output.get("predicted_program", "")
+        gold_program = item.outputs.get("program", "")
 
-        retrieval_precision = retrieval_precision_score(
-            retrieved_doc_ids, expected_doc_id
-        )
+        retrieved_doc_ids = [doc.metadata["id"] for doc in output.get("documents", [])]
+        reranked_doc_ids = [doc.metadata["id"] for doc in output.get("reranked_documents", [])]
+
+        retrieval_precision = retrieval_precision_score(retrieved_doc_ids, expected_doc_id)
         retrieval_recall = retrieval_recall_score(retrieved_doc_ids, expected_doc_id)
-        reranker_precision = retrieval_precision_score(
-            reranked_doc_ids, expected_doc_id
-        )
+        reranker_precision = retrieval_precision_score(reranked_doc_ids, expected_doc_id)
         reranker_recall = retrieval_recall_score(reranked_doc_ids, expected_doc_id)
         correctness = correctness_score(question, answer, expected)
+        program_acc = program_accuracy_score(predicted_program, gold_program)
+        exec_acc = execution_accuracy_score(predicted_program, expected)
 
-        if run_id:
-
-            records.append(
-                {
-                    "question": question,
-                    "expected": expected,
-                    "answer": answer,
-                    "generation": generation,
-                    "correctness": correctness,
-                    "retrieval_precision": retrieval_precision,
-                    "retrieval_recall": retrieval_recall,
-                    "reranker_precision": reranker_precision,
-                    "reranker_recall": reranker_recall,
-                }
-            )
-
-    for metric, score in {
-        "correctness": correctness,
-        "retrieval_precision": retrieval_precision,
-        "retrieval_recall": retrieval_recall,
-        "reranker_precision": reranker_precision,
-        "reranker_recall": reranker_recall,
-    }.items():
-        client.create_feedback(run_id=run_id, key=metric, score=score)
+        records.append({
+            "question": question,
+            "expected": expected,
+            "answer": answer,
+            "generation": generation,
+            "correctness": correctness,
+            "retrieval_precision": retrieval_precision,
+            "retrieval_recall": retrieval_recall,
+            "reranker_precision": reranker_precision,
+            "reranker_recall": reranker_recall,
+            "program_accuracy": program_acc,
+            "execution_accuracy": exec_acc,
+            "latency": latency,
+        })
 
     df = pd.DataFrame(records)
     df.to_csv("eval.csv", quoting=csv.QUOTE_NONNUMERIC)
-    print("~\~E Evaluation complete. Results saved to eval.csv")
+    print("~\\~E Evaluation complete. Results saved to eval.csv")
 
+    print("Average Program Accuracy:", df["program_accuracy"].mean())
+    print("Average Execution Accuracy:", df["execution_accuracy"].mean())
+    print("Mean Latency:", df["latency"].mean())
 
-    print("Average Program Accuracy:", df.get("program_accuracy", pd.Series()).mean())
-    print("Average Execution Accuracy:", df.get("execution_accuracy", pd.Series()).mean())
     return {
         "inputs": {"questions": [r["question"] for r in records]},
         "outputs": {
@@ -190,6 +156,8 @@ def run_eval():
                 "high_correct_rate": (df["correctness"] > 0.9).mean(),
                 "retrieval_precision_mean": df["retrieval_precision"].mean(),
                 "retrieval_recall_mean": df["retrieval_recall"].mean(),
+                "program_accuracy_mean": df["program_accuracy"].mean(),
+                "execution_accuracy_mean": df["execution_accuracy"].mean(),
             }
         },
     }
