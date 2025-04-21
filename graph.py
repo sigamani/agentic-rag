@@ -1,4 +1,4 @@
-from langgraph.graph import StateGraph
+rom langgraph.graph import StateGraph
 from langchain_core.messages import HumanMessage
 import dotenv
 from config import GraphConfig
@@ -13,7 +13,7 @@ from nodes import (
 )
 from state import AgentState
 
-from langfuse_config import langfuse_handler
+from langsmith.run_helpers import traceable
 from utils import typed_dict_to_dict
 
 dotenv.load_dotenv()
@@ -60,8 +60,8 @@ if __name__ == "__main__":
         ]
     }
 
-    for output in graph.stream(inputs, config={"callbacks": [langfuse_handler], 
-                                               "configurable": 
+    for output in graph.stream(inputs, config={"callbacks": [langfuse_handler],
+                                               "configurable":
                                                    typed_dict_to_dict(GraphConfig)
                                                }):
         for key, value in output.items():
@@ -73,7 +73,7 @@ if __name__ == "__main__":
         print()
 
 
-   
+
     image_bytes = graph.get_graph().draw_mermaid_png(
         draw_method=MermaidDrawMethod.API,
     )
