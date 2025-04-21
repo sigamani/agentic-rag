@@ -96,7 +96,6 @@ def run_eval():
         reranker_recall = retrieval_recall_score(reranked_doc_ids, expected_doc_id)
         correctness = correctness_score(question, answer, expected)
 
-        run_id = os.getenv("LANGSMITH_RUN_ID")
         if run_id:
 
             records.append({
