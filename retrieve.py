@@ -45,3 +45,6 @@ def retrieve_from_vector_db(
         "documents": results,
         "context": context,
     }
+
+        "context": context,
+    }
