@@ -97,10 +97,16 @@ def main():
 
     if args.use_langsmith and LangSmithClient:
         client = LangSmithClient()
-        run = client.create_run(name="eval_run", project_name=args.project, inputs={"eval_dataset": args.ref_file}, run_type="evaluation")
-        client.log_metric(run.id, "numeric_execution_accuracy", num_acc)
-        client.log_metric(run.id, "program_accuracy", prog_acc)
-        client.end_run(run.id)
+        client.create_run(
+        name="eval_run",
+        project_name=args.project,
+        inputs={"eval_dataset": args.ref_file},
+        outputs={
+            "numeric_execution_accuracy": num_acc,
+            "program_accuracy": prog_acc
+        },
+        run_type="chain"
+)
 
 
 if __name__ == "__main__":

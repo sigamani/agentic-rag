@@ -1,14 +1,25 @@
-
 import os
 import json
 import subprocess
 from datasets import load_dataset
 from datetime import datetime
-from llm import LLM
-from graph import Graph
+from graph import graph
 
 # Initialize LLM once
-llm_model = LLM()
+from langchain_together import ChatTogether
+from langsmith import traceable
+
+LLM_API_KEY = "f2ca76b85d77e125667559d3bbb282901dbb80d89af2f9831e6de303a532a2f0"
+LLM_API_BASE = "https://api.together.xyz/v1"
+MODEL_NAME = "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"
+
+llm_model = ChatTogether(
+    model=MODEL_NAME,
+    together_api_key=LLM_API_KEY,
+    base_url=LLM_API_BASE,
+    temperature=0
+)
+
 
 def generate_answer_and_program(example):
     question = example['question']
