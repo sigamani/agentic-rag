@@ -15,16 +15,46 @@ def difficulty_tag(program):
         return "medium"
     return "easy"
 
+def normalize_number_format(num_text):
+    try:
+        # Remove commas and normalize decimal
+        num = float(num_text.replace(",", "").strip())
+        return f"{num:.2f}"  # 2 decimal places
+    except:
+        return num_text
+
 def tag_numerical_tokens(text):
-    text = re.sub(r"\$\s?([\d,.]+)", r"<CURRENCY> \1 </CURRENCY>", text)
-    text = re.sub(r"([\d,.]+)%", r"<PERCENT> \1 </PERCENT>", text)
-    text = re.sub(r"(?<!\$)(?<!%)\b([\d,.]+)\b", r"<NUMBER> \1 </NUMBER>", text)
+    if not text:
+        return text
+
+    # Normalize and tag currency
+    def currency_repl(match):
+        val = normalize_number_format(match.group(1))
+        return f"<CURRENCY> {val} </CURRENCY>"
+
+    # Normalize and tag percentages
+    def percent_repl(match):
+        val = normalize_number_format(match.group(1))
+        return f"<PERCENT> {val} </PERCENT>"
+
+    # Normalize comma-style plain numbers
+    def number_repl(match):
+        val = normalize_number_format(match.group(1))
+        return f"<NUMBER> {val} </NUMBER>"
+
+    text = re.sub(r"\$\s?([\d,.]+)", currency_repl, text)
+    text = re.sub(r"([\d,.]+)%", percent_repl, text)
+    text = re.sub(r"\b(Q[1-4]|20\d{2}|19\d{2})\b", r"<TIME> \1 </TIME>", text)  # Tag quarters and years
+    text = re.sub(r"(?<!\$)(?<!%)\b([\d]{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)\b", number_repl, text)
     return text
 
 def summarize_table(text):
     if not text:
         return ""
-    lines = text.splitlines()
+    if isinstance(text, list):
+        lines = text
+    else:
+        lines = text.splitlines()
     numeric_lines = [line for line in lines if any(char.isdigit() for char in line)]
     return f"Summary: {len(numeric_lines)} rows of numeric data present. Headers include: {lines[0] if lines else ''}".strip()
 
