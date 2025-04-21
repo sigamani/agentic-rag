@@ -93,6 +93,8 @@ def execution_accuracy_score(predicted_program, gold_answer):
 @traceable(name="run_eval", project_name=project_name)
 def run_eval():
     records = []
+    logged_inputs = []
+    logged_outputs = []
 
     for item in tqdm(examples):
         question = item.inputs["question"]
@@ -103,18 +105,13 @@ def run_eval():
 
         start = time.time()
         output = graph.invoke(
-            inputs, config={"configurable": typed_dict_to_dict(GraphConfig)}
+            inputs,
+            config={"configurable": typed_dict_to_dict(GraphConfig)},
         )
         latency = time.time() - start
 
         answer = output["answer"]
         generation = output.get("generation", "")
-        predicted_program = output.get("program", "")
-        gold_program = item.outputs.get("program", "")
-
-        program_acc = program_accuracy_score(predicted_program, gold_program)
-        exec_acc = execution_accuracy_score(predicted_program, expected)
-
         retrieved_doc_ids = [doc.metadata["id"] for doc in output.get("documents", [])]
         reranked_doc_ids = [doc.metadata["id"] for doc in output.get("reranked_documents", [])]
 
@@ -123,6 +120,10 @@ def run_eval():
         reranker_precision = retrieval_precision_score(reranked_doc_ids, expected_doc_id)
         reranker_recall = retrieval_recall_score(reranked_doc_ids, expected_doc_id)
         correctness = correctness_score(question, answer, expected)
+
+        program = output.get("program", "")
+        program_acc = program_accuracy_score(program, item.outputs.get("program", ""))
+        exec_acc = execution_accuracy_score(program, expected)
 
         records.append({
             "question": question,
@@ -134,19 +135,30 @@ def run_eval():
             "retrieval_recall": retrieval_recall,
             "reranker_precision": reranker_precision,
             "reranker_recall": reranker_recall,
-            "program": predicted_program,
             "program_accuracy": program_acc,
             "execution_accuracy": exec_acc,
-            "latency": latency
+            "latency": latency,
         })
+
+        logged_inputs.append(question)
+        logged_outputs.append(answer)
 
     df = pd.DataFrame(records)
     df.to_csv("eval.csv", quoting=csv.QUOTE_NONNUMERIC)
-    print("~\\~E Evaluation complete. Results saved to eval.csv")
-
+    print("~\~E Evaluation complete. Results saved to eval.csv")
     print("Average Program Accuracy:", df["program_accuracy"].mean())
     print("Average Execution Accuracy:", df["execution_accuracy"].mean())
-    print(f"Mean Latency: {df['latency'].mean()}s")
+    print("Mean Latency:", df["latency"].mean(), "s")
 
+    return {
+        "inputs": {"questions": logged_inputs},
+        "outputs": {"answers": logged_outputs, "summary": {
+            "correctness_mean": df["correctness"].mean(),
+            "high_correct_rate": (df["correctness"] > HIGH_CORRECTNESS_THRESHOLD).mean(),
+            "retrieval_precision_mean": df["retrieval_precision"].mean(),
+            "retrieval_recall_mean": df["retrieval_recall"].mean(),
+        }},
+    }
+    
 if __name__ == "__main__":
     run_eval()
