@@ -32,7 +32,6 @@ reason_and_answer_prompt_template = PromptTemplate(
             <REASONING>
                 To calculate the percentage change, we can use the formula:
 
-                percentage_change = ((new_value - old_value) / old_value) * 100
 
                 Substituting the given values:
 
@@ -104,6 +103,7 @@ eval_prompt_template = PromptTemplate(
     """,
     input_variables=["question", "actual_answer", "expected_answer"],
 )
+
 
 extract_anwer_prompt_template = PromptTemplate(
     template="""
