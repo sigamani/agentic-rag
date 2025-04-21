@@ -100,6 +100,23 @@ def program_accuracy(predicted_program, expected_program):
 
 
 @traceable(name="run_eval", project_name=project_name)
+
+def safe_eval(expr):
+    try:
+        return eval(expr, {"__builtins__": {}}, {})
+    except Exception:
+        return None
+
+def program_accuracy_score(predicted_program, gold_program):
+    return int(predicted_program.strip() == gold_program.strip())
+
+def execution_accuracy_score(predicted_program, gold_answer):
+    pred_result = safe_eval(predicted_program)
+    try:
+        gold_result = float(gold_answer.replace('%', '').replace("$", "").replace(",", "").strip())
+    except Exception:
+        gold_result = None
+    return int(pred_result == gold_result if pred_result is not None and gold_result is not None else 0)
 def run_eval():
     records = []
 
@@ -162,6 +179,9 @@ def run_eval():
     df.to_csv("eval.csv", quoting=csv.QUOTE_NONNUMERIC)
     print("~\~E Evaluation complete. Results saved to eval.csv")
 
+
+    print("Average Program Accuracy:", df.get("program_accuracy", pd.Series()).mean())
+    print("Average Execution Accuracy:", df.get("execution_accuracy", pd.Series()).mean())
     return {
         "inputs": {"questions": [r["question"] for r in records]},
         "outputs": {
