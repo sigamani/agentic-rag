@@ -1,51 +1,38 @@
+# eval_dual_retrieval_r_at3.py
 import json
-from pathlib import Path
-from tqdm import tqdm
-from retriever_1 import retriever_1
-from retriever_2 import retriever_2
+from retrieve import RelevantDocumentRetriever
 
-# --- Constants ---
-TOP_K = 3
-DATA_PATH = Path("data/dev.json")
+def load_gold_data(file_path):
+    with open(file_path, "r") as f:
+        return json.load(f)
 
-# --- Load dataset ---
-with open(DATA_PATH) as f:
-    data = json.load(f)
+def compute_r_at_k(method, retriever, data, k=3):
+    correct = 0
+    total = 0
 
-# --- Evaluation ---
-results = []
+    for example in data:
+        question = example["qa"]["question"]
+        expected_chunks = example["evidence"]  # list of expected substrings
 
-for example in tqdm(data):
-    query = example["conversation"][-1]["content"]
-    expected_chunks = example["answer"]  # list of expected DSL tokens
+        if method == "q2d":
+            retrieved_docs = retriever.query(question, top_k=k)
+        elif method == "dense":
+            retrieved_docs = retriever.dense_query(question, top_k=k)
+        else:
+            raise ValueError("Method must be 'q2d' or 'dense'")
 
-    retrieved_1 = retriever_1(query, k=TOP_K)
-    retrieved_2 = retriever_2(query, k=TOP_K)
+        retrieved_texts = [doc.page_content for doc in retrieved_docs]
+        if any(gold in text for gold in expected_chunks for text in retrieved_texts):
+            correct += 1
+        total += 1
 
-    def recall_at_k(retrieved, expected):
-        hits = 0
-        for chunk in expected:
-            if any(chunk in r for r in retrieved):
-                hits += 1
-        return hits / len(expected) if expected else 0.0
+    recall = correct / total if total > 0 else 0.0
+    print(f"[{method}] Recall@{k}: {recall:.4f} ({correct}/{total})")
+    return recall
 
-    recall_1 = recall_at_k(retrieved_1, expected_chunks)
-    recall_2 = recall_at_k(retrieved_2, expected_chunks)
+if __name__ == "__main__":
+    retriever = RelevantDocumentRetriever(data_path="data/dev.json")
+    data = load_gold_data("data/dev.json")
 
-    results.append({
-        "id": example["id"],
-        "query": query,
-        "expected": expected_chunks,
-        "retriever_1_r@3": recall_1,
-        "retriever_2_r@3": recall_2,
-    })
-
-# --- Print summary ---
-avg_r1 = sum(r["retriever_1_r@3"] for r in results) / len(results)
-avg_r2 = sum(r["retriever_2_r@3"] for r in results) / len(results)
-print(f"Retriever 1 avg R@3: {avg_r1:.3f}")
-print(f"Retriever 2 avg R@3: {avg_r2:.3f}")
-
-# --- Optional: Save results to file ---
-with open("dual_retrieval_eval.json", "w") as f:
-    json.dump(results, f, indent=2)
+    compute_r_at_k("q2d", retriever, data, k=3)
+    compute_r_at_k("dense", retriever, data, k=3)
