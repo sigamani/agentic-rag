@@ -1,12 +1,12 @@
 from typing import TypedDict
 
 DATA_PATH = "data/train.json"
-DATA_LIMIT_EVAL = 1000
+DATA_LIMIT_EVAL = 10
 DATA_LIMIT_DB = 10000
 CHEATING_RETRIEVAL = False
 DISABLE_GENERATION = False
-LANGFUSE_DATASET_NAME = "convfinqa-train"
 COLLECTION_NAME = "financial_docs"
+LANGFUSE_DATASET_NAME = "convfinqa-train2" 
 EMBEDDING_MODEL = "multi-qa-mpnet-base-dot-v1"
 DB_PATH = "./vector_database"
 

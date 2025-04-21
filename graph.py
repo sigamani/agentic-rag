@@ -52,6 +52,7 @@ if __name__ == "__main__":
     import pprint
     from IPython.display import Image
     from langchain_core.runnables.graph import MermaidDrawMethod
+
     inputs = {
         "messages": [
             HumanMessage(
@@ -60,10 +61,13 @@ if __name__ == "__main__":
         ]
     }
 
-    for output in graph.stream(inputs, config={"callbacks": [langfuse_handler],
-                                               "configurable":
-                                                   typed_dict_to_dict(GraphConfig)
-                                               }):
+    for output in graph.stream(
+        inputs,
+        config={
+            "callbacks": [langfuse_handler],
+            "configurable": typed_dict_to_dict(GraphConfig),
+        },
+    ):
         for key, value in output.items():
             print(f"Output from node '{key}':")
             print("---")
@@ -71,8 +75,6 @@ if __name__ == "__main__":
         print()
         print("---")
         print()
-
-
 
     image_bytes = graph.get_graph().draw_mermaid_png(
         draw_method=MermaidDrawMethod.API,
