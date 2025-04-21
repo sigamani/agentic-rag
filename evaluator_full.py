@@ -1,3 +1,4 @@
+
 import argparse
 import json
 import numpy as np
@@ -12,11 +13,10 @@ except ImportError:
     pass
 
 # Optional LangSmith import
-LangSmithClient = None
-try:
-    from langsmith import Client as LangSmithClient
-except ImportError:
-    pass
+from langsmith import Client as LangSmithClient
+import os
+os.environ['LANGCHAIN_API_KEY'] = os.getenv('LANGCHAIN_API_KEY', 'your-key-here')
+os.environ['LANGCHAIN_PROJECT'] = os.getenv('LANGCHAIN_PROJECT', 'convfinqa-eval')
 
 
 def normalize_answer(ans: str) -> Optional[float]:
@@ -97,7 +97,7 @@ def main():
 
     if args.use_langsmith and LangSmithClient:
         client = LangSmithClient()
-        run = client.create_run(name="eval_run", project_name=args.project)
+        run = client.create_run(name="eval_run", project_name=args.project, inputs={"eval_dataset": args.ref_file}, run_type="evaluation")
         client.log_metric(run.id, "numeric_execution_accuracy", num_acc)
         client.log_metric(run.id, "program_accuracy", prog_acc)
         client.end_run(run.id)

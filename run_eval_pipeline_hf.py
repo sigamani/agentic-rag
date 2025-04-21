@@ -10,10 +10,11 @@ def main():
     dataset = load_dataset("TheFinAI/CONVFINQA_test_test", split="val")
     total = len(dataset)
 
-    # Use last 1500 as test
-    test_size = 1500
-    train_dataset = dataset.select(range(0, total - test_size))
-    test_dataset = dataset.select(range(total - test_size, total))
+    # Use last up to 1500 as test
+    test_size = min(1500, total)
+    split_index = total - test_size
+    train_dataset = dataset.select(range(0, split_index))
+    test_dataset = dataset.select(range(split_index, total))
 
     # Construct references from test set
     references = [
