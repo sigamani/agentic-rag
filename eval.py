@@ -35,17 +35,14 @@ def relative_score(a, b, power=2):
         return 1.0
     return 1 - ((abs(a - b) / max(abs(a), abs(b))) ** power)
 
-
 def retrieval_precision_score(predicted, expected):
     try:
         return float(expected in predicted) / len(predicted)
     except ZeroDivisionError:
         return 0.0
 
-
 def retrieval_recall_score(predicted, expected):
     return float(expected in predicted)
-
 
 def correctness_score(input_q, predicted, expected):
     if DISABLE_GENERATION:
@@ -60,44 +57,35 @@ def correctness_score(input_q, predicted, expected):
         return 1
 
     try:
-        expected_parsed = float(
-            expected.replace("%", "e-2").replace("$", "").replace(",", "")
-        )
-        predicted_parsed = float(
-            predicted.replace("%", "e-2").replace("$", "").replace(",", "")
-        )
+        expected_parsed = float(expected.replace('%', 'e-2').replace("$", "").replace(",", ""))
+        predicted_parsed = float(predicted.replace('%', 'e-2').replace("$", "").replace(",", ""))
         return relative_score(predicted_parsed, expected_parsed)
     except Exception:
         pass
 
-    prompt = eval_prompt_template.format(
-        question=input_q, actual_answer=predicted, expected_answer=expected
-    )
+    prompt = eval_prompt_template.format(question=input_q, actual_answer=predicted, expected_answer=expected)
     out = llm.invoke([HumanMessage(content=format_prompt(prompt))])
     try:
-        return abs(
-            float(out.content.strip().replace("<OUTPUT>", "").replace("</OUTPUT>", ""))
-        )
+        return abs(float(out.content.strip().replace("<OUTPUT>", "").replace("</OUTPUT>", "")))
     except:
         return None
 
-
-def execution_accuracy(predicted_program, expected_answer, exec_fn):
+def safe_eval(expr):
     try:
-        result = exec_fn(predicted_program)  # Safely run the DSL or Python code
-        expected_val = float(
-            expected_answer.replace("%", "e-2").replace("$", "").replace(",", "")
-        )
-        return relative_score(result, expected_val)
-    except Exception as e:
-        return 0.0  # or None if you want to distinguish failures
+        return eval(expr, {"__builtins__": {}}, {})
+    except Exception:
+        return None
 
+def program_accuracy_score(predicted_program, gold_program):
+    return int(predicted_program.strip() == gold_program.strip())
 
-def program_accuracy(predicted_program, expected_program):
-    predicted = predicted_program.strip().lower()
-    expected = expected_program.strip().lower()
-    return float(predicted == expected)
-
+def execution_accuracy_score(predicted_program, gold_answer):
+    pred_result = safe_eval(predicted_program)
+    try:
+        gold_result = float(gold_answer.replace('%', '').replace("$", "").replace(",", "").strip())
+    except Exception:
+        gold_result = None
+    return int(pred_result == gold_result if pred_result is not None and gold_result is not None else 0)
 
 @traceable(name="run_eval", project_name=project_name)
 def run_eval():
@@ -111,68 +99,62 @@ def run_eval():
         inputs = {"messages": [HumanMessage(content=question)]}
 
         start = time.time()
-        output = graph.invoke(
-            inputs, config={"configurable": typed_dict_to_dict(GraphConfig)}
-        )
+        output = graph.invoke(inputs, config={"configurable": typed_dict_to_dict(GraphConfig)})
         latency = time.time() - start
 
         answer = output["answer"]
         generation = output.get("generation", "")
+        predicted_program = output.get("program", "")
+        gold_program = item.outputs.get("program", "")
         retrieved_doc_ids = [doc.metadata["id"] for doc in output.get("documents", [])]
-        reranked_doc_ids = [
-            doc.metadata["id"] for doc in output.get("reranked_documents", [])
-        ]
+        reranked_doc_ids = [doc.metadata["id"] for doc in output.get("reranked_documents", [])]
 
-        retrieval_precision = retrieval_precision_score(
-            retrieved_doc_ids, expected_doc_id
-        )
+        retrieval_precision = retrieval_precision_score(retrieved_doc_ids, expected_doc_id)
         retrieval_recall = retrieval_recall_score(retrieved_doc_ids, expected_doc_id)
-        reranker_precision = retrieval_precision_score(
-            reranked_doc_ids, expected_doc_id
-        )
+        reranker_precision = retrieval_precision_score(reranked_doc_ids, expected_doc_id)
         reranker_recall = retrieval_recall_score(reranked_doc_ids, expected_doc_id)
         correctness = correctness_score(question, answer, expected)
+        program_acc = program_accuracy_score(predicted_program, gold_program)
+        execution_acc = execution_accuracy_score(predicted_program, expected)
 
-        if run_id:
-
-            records.append(
-                {
-                    "question": question,
-                    "expected": expected,
-                    "answer": answer,
-                    "generation": generation,
-                    "correctness": correctness,
-                    "retrieval_precision": retrieval_precision,
-                    "retrieval_recall": retrieval_recall,
-                    "reranker_precision": reranker_precision,
-                    "reranker_recall": reranker_recall,
-                }
-            )
-
-    for metric, score in {
-        "correctness": correctness,
-        "retrieval_precision": retrieval_precision,
-        "retrieval_recall": retrieval_recall,
-        "reranker_precision": reranker_precision,
-        "reranker_recall": reranker_recall,
-    }.items():
-        client.create_feedback(run_id=run_id, key=metric, score=score)
+        records.append({
+            "question": question,
+            "expected": expected,
+            "answer": answer,
+            "generation": generation,
+            "program": predicted_program,
+            "gold_program": gold_program,
+            "correctness": correctness,
+            "retrieval_precision": retrieval_precision,
+            "retrieval_recall": retrieval_recall,
+            "reranker_precision": reranker_precision,
+            "reranker_recall": reranker_recall,
+            "program_accuracy": program_acc,
+            "execution_accuracy": execution_acc,
+            "latency": latency
+        })
 
     df = pd.DataFrame(records)
     df.to_csv("eval.csv", quoting=csv.QUOTE_NONNUMERIC)
     print("~\~E Evaluation complete. Results saved to eval.csv")
+
+    print("Average Program Accuracy:", df["program_accuracy"].mean())
+    print("Average Execution Accuracy:", df["execution_accuracy"].mean())
+    print("Mean Latency:", df["latency"].mean(), "s")
+
+    for metric in ["correctness", "retrieval_precision", "retrieval_recall", "reranker_precision", "reranker_recall", "program_accuracy", "execution_accuracy"]:
+        score = df[metric].mean()
+        try:
+            client.create_feedback(run_id=run_id, key=metric, score=score)
+        except Exception as e:
+            print(f"Error creating feedback for {metric}: {e}")
 
     return {
         "inputs": {"questions": [r["question"] for r in records]},
         "outputs": {
             "summary": {
                 "correctness_mean": df["correctness"].mean(),
-                "high_correct_rate": (df["correctness"] > 0.9).mean(),
-                "retrieval_precision_mean": df["retrieval_precision"].mean(),
-                "retrieval_recall_mean": df["retrieval_recall"].mean(),
-            }
-        },
-    }
+                
 
 
 if __name__ == "__main__":
