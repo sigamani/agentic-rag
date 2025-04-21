@@ -1,4 +1,4 @@
-rom langgraph.graph import StateGraph
+from langgraph.graph import StateGraph
 from langchain_core.messages import HumanMessage
 import dotenv
 from config import GraphConfig
