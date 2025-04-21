@@ -2,17 +2,21 @@
 import json
 from retrieve import RelevantDocumentRetriever
 
-def load_gold_data(file_path):
-    with open(file_path, "r") as f:
-        return json.load(f)
+def load_jsonl(filepath):
+    with open(filepath, "r") as f:
+        return [json.loads(line) for line in f]
+
+def get_chunks(example):
+    return example.get("pre_text", []) + example.get("post_text", []) + example.get("table", [])
 
 def compute_r_at_k(method, retriever, data, k=3):
     correct = 0
     total = 0
 
     for example in data:
-        question = example["qa"]["question"]
-        expected_chunks = example["evidence"]  # list of expected substrings
+        question = example["question"]
+        all_chunks = get_chunks(example)
+        gold_inds = example.get("gold_inds", [])
 
         if method == "q2d":
             retrieved_docs = retriever.query(question, top_k=k)
@@ -22,7 +26,7 @@ def compute_r_at_k(method, retriever, data, k=3):
             raise ValueError("Method must be 'q2d' or 'dense'")
 
         retrieved_texts = [doc.page_content for doc in retrieved_docs]
-        if any(gold in text for gold in expected_chunks for text in retrieved_texts):
+        if any(all_chunks[i] in retrieved_texts for i in gold_inds):
             correct += 1
         total += 1
 
@@ -31,8 +35,8 @@ def compute_r_at_k(method, retriever, data, k=3):
     return recall
 
 if __name__ == "__main__":
-    retriever = RelevantDocumentRetriever(data_path="data/dev.json")
-    data = load_gold_data("data/dev.json")
+    retriever = RelevantDocumentRetriever(data_path="data/dev.jsonl")
+    data = load_jsonl("data/dev.jsonl")
 
     compute_r_at_k("q2d", retriever, data, k=3)
     compute_r_at_k("dense", retriever, data, k=3)
