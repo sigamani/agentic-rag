@@ -145,7 +145,7 @@ def run_eval():
 
     df = pd.DataFrame(records)
     df.to_csv("eval.csv", quoting=csv.QUOTE_NONNUMERIC)
-    print("~\~E Evaluation complete. Results saved to eval.csv")
+    print("Evaluation complete. Results saved to eval.csv")
     print("Average Program Accuracy:", df["program_accuracy"].mean())
     print("Average Execution Accuracy:", df["execution_accuracy"].mean())
     print("Mean Latency:", df["latency"].mean(), "s")
