@@ -4,31 +4,53 @@ import json
 import subprocess
 from datasets import load_dataset
 from datetime import datetime
+from llm import LLM
+from graph import Graph
+
+# Initialize LLM once
+llm_model = LLM()
+
+def generate_answer_and_program(example):
+    question = example['question']
+    table = example['table']
+    history = example.get('history', [])
+
+    # Generate program using model
+    program = llm_model.generate_program(question, table, history)
+
+    # Execute program to get final answer
+    graph = Graph(table)
+    answer = graph.execute(program)
+
+    return {
+        "answer": answer,
+        "program": program
+    }
 
 def main():
-    # Load full val set from HF
     dataset = load_dataset("TheFinAI/CONVFINQA_test_test", split="val")
     total = len(dataset)
 
-    # Use last up to 1500 as test
     test_size = min(1500, total)
     split_index = total - test_size
-    train_dataset = dataset.select(range(0, split_index))
     test_dataset = dataset.select(range(split_index, total))
 
-    # Construct references from test set
+    # Generate predictions from model
+    predictions = []
+    for row in test_dataset:
+        generated = generate_answer_and_program(row)
+        predictions.append({
+            "id": row["id"],
+            "answer": generated["answer"],
+            "program": generated.get("program", "")
+        })
+
+    # Use same data as reference set for now (can be improved)
     references = [
         {"id": row["id"], "answer": row["answer"], "program": row.get("program", "")}
         for row in test_dataset
     ]
 
-    # TODO: Replace with actual model predictions
-    predictions = [
-        {"id": row["id"], "answer": row["answer"], "program": row.get("program", "")}
-        for row in test_dataset
-    ]
-
-    # Save to disk
     output_dir = "eval_outputs"
     os.makedirs(output_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -43,7 +65,6 @@ def main():
         for item in references:
             f.write(json.dumps(item) + "\n")
 
-    # Evaluate
     cmd = [
         "python3",
         "evaluator_full.py",
@@ -59,7 +80,6 @@ def main():
     if result.stderr:
         print("--- STDERR ---")
         print(result.stderr)
-
 
 if __name__ == "__main__":
     main()
