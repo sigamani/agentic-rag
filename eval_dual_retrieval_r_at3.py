@@ -2,9 +2,11 @@
 import json
 from retrieve import RelevantDocumentRetriever
 
+
 def load_jsonl(filepath):
     with open(filepath, "r") as f:
-        return [json.loads(line) for line in f]
+        return [json.loads(line) for line in f if line.strip()]
+
 
 def get_chunks(example):
     return example.get("pre_text", []) + example.get("post_text", []) + example.get("table", [])
@@ -35,8 +37,8 @@ def compute_r_at_k(method, retriever, data, k=3):
     return recall
 
 if __name__ == "__main__":
-    retriever = RelevantDocumentRetriever(data_path="data/dev.jsonl")
-    data = load_jsonl("data/dev.jsonl")
+    retriever = RelevantDocumentRetriever(data_path="data/dev.json")
+    data = load_jsonl("data/dev.json")
 
     compute_r_at_k("q2d", retriever, data, k=3)
     compute_r_at_k("dense", retriever, data, k=3)
