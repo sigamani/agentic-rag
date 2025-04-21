@@ -29,7 +29,6 @@ datasets = client.list_datasets()
 dataset = next(ds for ds in datasets if ds.name == LANGFUSE_DATASET_NAME)
 examples = list(client.list_examples(dataset_id=dataset.id))[:DATA_LIMIT_EVAL]
 
-
 def relative_score(a, b, power=2):
     if a == b:
         return 1.0
@@ -154,8 +153,15 @@ def run_eval():
         "outputs": {
             "summary": {
                 "correctness_mean": df["correctness"].mean(),
-                
-
+                "high_correct_rate": (df["correctness"] > HIGH_CORRECTNESS_THRESHOLD).mean(),
+                "retrieval_precision_mean": df["retrieval_precision"].mean(),
+                "retrieval_recall_mean": df["retrieval_recall"].mean(),
+                "program_accuracy_mean": df["program_accuracy"].mean(),
+                "execution_accuracy_mean": df["execution_accuracy"].mean(),
+                "mean_latency": df["latency"].mean()
+            }
+        },
+    }
 
 if __name__ == "__main__":
     run_eval()
