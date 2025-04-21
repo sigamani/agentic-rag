@@ -1,7 +1,46 @@
 from langchain.prompts import PromptTemplate
 
-# Prompt
 reason_and_answer_prompt_template = PromptTemplate(
+    template = '''
+    You are a financial reasoning assistant. Your task is to read a user's natural language question and a structured table, then generate a precise answer using mathematical reasoning.
+    
+    First, interpret the table and extract any necessary numeric values.
+    Then, write a short program-like expression in natural language that explains how to compute the answer.
+    Finally, output a JSON object with two fields:
+    
+    - "program": a string showing the symbolic math operation (e.g., "subtract(60.94, 25.14), divide(#0, 25.14)")
+    - "answer": the final computed value (rounded to 5 decimal places if needed)
+    
+    Only return the JSON. Do not include any additional text or commentary.
+    
+    ### Example Input
+    Question: What is the percentage increase in exercise price from 2005 to 2007?
+    Table:
+    | Year | Price |
+    |------|-------|
+    | 2005 | 25.14 |
+    | 2006 | 37.84 |
+    | 2007 | 60.94 |
+    
+    ### Output
+    {
+      "program": "subtract(60.94, 25.14), divide(#0, 25.14)",
+      "answer": 1.42403
+    }
+    
+    ### New Input
+    Question: {question}
+    Table:
+    {context}
+    
+    ### Output
+    ''',
+    input_variables=["question", "context"],
+)
+
+
+# Prompt
+reason_and_answer_prompt_template_old = PromptTemplate(
     template="""You are an investment analyst. You will be given: 
     <INSTRUCTIONS>
         You will be provided:
