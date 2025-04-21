@@ -1,4 +1,5 @@
 import os
+import uuid
 import time
 import csv
 import dotenv
@@ -9,7 +10,7 @@ from langsmith import Client
 from langsmith.run_helpers import traceable
 from langchain_core.messages import HumanMessage
 
-from config import DATA_LIMIT_EVAL, LANGFUSE_DATASET_NAME, GraphConfig
+from config import DATA_LIMIT_EVAL, GraphConfig, LANGFUSE_DATASET_NAME
 from graph import graph
 from utils import typed_dict_to_dict, format_prompt
 from llm import llm, MODEL_NAME
@@ -19,13 +20,15 @@ from nodes import CHEATING_RETRIEVAL, DISABLE_GENERATION
 dotenv.load_dotenv()
 client = Client()
 
-project_name = "convfinqa-eval"
+run_id = str(uuid.uuid4())
+project_name = os.getenv("LANGSMITH_PROJECT")
 
 HIGH_CORRECTNESS_THRESHOLD = 0.9
 
 datasets = client.list_datasets()
 dataset = next(ds for ds in datasets if ds.name == LANGFUSE_DATASET_NAME)
 examples = list(client.list_examples(dataset_id=dataset.id))[:DATA_LIMIT_EVAL]
+
 
 def relative_score(a, b, power=2):
     if a == b:
@@ -95,29 +98,40 @@ def run_eval():
 
         run_id = os.getenv("LANGSMITH_RUN_ID")
         if run_id:
-            client.log_metric(run_id=run_id, key="correctness", value=correctness)
-            client.log_metric(run_id=run_id, key="latency", value=latency)
-            client.log_metric(run_id=run_id, key="retrieval_precision", value=retrieval_precision)
-            client.log_metric(run_id=run_id, key="retrieval_recall", value=retrieval_recall)
-            client.log_metric(run_id=run_id, key="reranker_precision", value=reranker_precision)
-            client.log_metric(run_id=run_id, key="reranker_recall", value=reranker_recall)
 
-        records.append({
-            "question": question,
-            "expected": expected,
-            "answer": answer,
-            "generation": generation,
-            "correctness": correctness,
-            "retrieval_precision": retrieval_precision,
-            "retrieval_recall": retrieval_recall,
-            "reranker_precision": reranker_precision,
-            "reranker_recall": reranker_recall,
-            "latency": latency,
-        })
+            records.append({
+                "question": question,
+                "expected": expected,
+                "answer": answer,
+                "generation": generation,
+                "correctness": correctness,
+                "retrieval_precision": retrieval_precision,
+                "retrieval_recall": retrieval_recall,
+                "reranker_precision": reranker_precision,
+                "reranker_recall": reranker_recall})
+
+    for metric, score in {
+        "correctness": correctness,
+        "retrieval_precision": retrieval_precision,
+        "retrieval_recall": retrieval_recall,
+        "reranker_precision": reranker_precision,
+        "reranker_recall": reranker_recall
+    }.items():
+        client.create_feedback(run_id=run_id, key=metric, score=score)
 
     df = pd.DataFrame(records)
     df.to_csv("eval.csv", quoting=csv.QUOTE_NONNUMERIC)
-    print("✅ Evaluation complete. Results saved to eval.csv")
+    print("~\~E Evaluation complete. Results saved to eval.csv")
+    
+    return {"inputs": {"questions": [r["question"] for r in records]},
+        "outputs": {"summary": {
+            "correctness_mean": df["correctness"].mean(),
+            "high_correct_rate": (df["correctness"] > 0.9).mean(),
+            "retrieval_precision_mean": df["retrieval_precision"].mean(),
+            "retrieval_recall_mean": df["retrieval_recall"].mean(),
+        }}
+    }
+
 
 if __name__ == "__main__":
     run_eval()
