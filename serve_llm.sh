@@ -1,2 +1,1 @@
-HF_TOKEN=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
-vllm serve models/Llama-3.1-Storm-8B.Q8_0.gguf --gpu_memory_utilization 0.9 --max_model_len 48000 --enforce-eager
+ollama serve --ctx-size 4096 --batch-size 128 --n-gpu-layers 24 --threads 9 --parallel 2

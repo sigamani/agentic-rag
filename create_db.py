@@ -1,36 +1,52 @@
+# create_db.py
+
 import json
-from retrieve import chromadb_client, sentence_transformer_ef
-from utils import format_document
-from config import DATA_PATH, DATA_LIMIT_DB, COLLECTION_NAME
+from langchain_community.embeddings import OllamaEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain_core.documents import Document
+from pathlib import Path
 
-def parse_convfinqa_dataset(filepath, limit: int = None):
-    with open(filepath, 'r') as f:
-        data = json.load(f)
+def parse_llm_extracted_jsonl(filepath, limit=None):
     docs = []
-    
-    if limit:
-        data = data[:limit]
-
-    for entry in data:
-        doc = format_document(entry)
-        docs.append(doc)
-    
+    with open(filepath, 'r') as f:
+        for i, line in enumerate(f):
+            if limit and i >= limit:
+                break
+            entry = json.loads(line)
+            if "extracted" not in entry:
+                continue
+            for field in entry["extracted"]:
+                try:
+                    text = f"{field['name']} of {field['value']} {field['unit']} on {field['date']}. Summary: {field['description']}"
+                    doc = Document(
+                        page_content=text,
+                        metadata={
+                            "source_id": field.get("id"),
+                            "name": field.get("name"),
+                            "value": field.get("value"),
+                            "unit": field.get("unit"),
+                            "date": field.get("date"),
+                            "row": field.get("row"),
+                            "doc_id": entry["id"],
+                            "description": field.get("description"),
+                            "raw_metadata": field.get("metadata")
+                        }
+                    )
+                    docs.append(doc)
+                except Exception as e:
+                    print(f"Skipping bad field: {e}")
     return docs
 
+if __name__ == "__main__":
+    input_file = "extracted.jsonl"
+    persist_dir = "chroma_index"
+    embedding_model = "nomic-embed-text"
 
-try:
-    chromadb_client.delete_collection(name=COLLECTION_NAME)
-    chromadb_client.clear_system_cache()
-except ValueError:
-    pass
+    docs = parse_llm_extracted_jsonl(input_file)
 
-db = chromadb_client.create_collection(name=COLLECTION_NAME, embedding_function=sentence_transformer_ef)
+    embeddings = OllamaEmbeddings(model=embedding_model)
+    vectordb = Chroma.from_documents(docs, embeddings, persist_directory=persist_dir)
+    vectordb.persist()
 
-docs = parse_convfinqa_dataset(DATA_PATH, limit=DATA_LIMIT_DB)
-ids = [doc.id for doc in docs]
-texts = [doc.page_content for doc in docs]
-metadatas = [doc.metadata for doc in docs]
-
-db.add(ids=ids, documents=texts, metadatas=metadatas)
-
+    print(f"✅ Vector index created with {len(docs)} documents at {persist_dir}")
 

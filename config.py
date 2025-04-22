@@ -13,5 +13,5 @@ DB_PATH = "./vector_database"
 class GraphConfig(TypedDict):
     retrieval_k: int = 10
     rerank_k: int = 3
-    max_tokens: int = 4096
+    max_tokens: int = 2048
     temperature: float = 0.0

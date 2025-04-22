@@ -1,25 +1,17 @@
-from langchain_together import ChatTogether
-import os
+from langchain_ollama import OllamaLLM
 from langsmith import traceable
+from langchain_core.messages import HumanMessage
+ 
 
-# Hardcoded Together AI configuration
-LLM_API_KEY = "f2ca76b85d77e125667559d3bbb282901dbb80d89af2f9831e6de303a532a2f0"
-LLM_API_BASE = "https://api.together.xyz/v1"
-MODEL_NAME = "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"
+MODEL_NAME = "hf.co/mradermacher/tat-llm-7b-fft-i1-GGUF:Q4_K_M"
+# Initialize the model
+llm = OllamaLLM(model=MODEL_NAME)
 
-llm = ChatTogether(
-    model=MODEL_NAME,
-    together_api_key=LLM_API_KEY,
-    base_url=LLM_API_BASE,
-    temperature=0
-)
+
+@traceable(name="LLM test call")
+def call_llm(prompt: str):
+    return llm.invoke(prompt)
 
 if __name__ == "__main__":
-    from langchain_core.messages import HumanMessage
-
-    @traceable(name="LLM test call")
-    def call_llm(prompt: str):
-        return llm.invoke([HumanMessage(content=prompt)])
-
-    output = call_llm("Hello World")
-    print(output.content)
+    output = call_llm("Who was Kurt Cobain?")
+    print(output)

@@ -26,10 +26,30 @@ dotenv.load_dotenv()
 cheating_retriever = RelevantDocumentRetriever(DATA_PATH)
 
 
-def extract_question(state: AgentState, config: GraphConfig) -> AgentState:
-    messages = state["messages"]
-    question = messages[-1].content
-    return {"question": question}
+def extract_question(state: dict) -> dict:
+    question = (
+        state.get("question")
+        or state.get("Question")
+        or (state.get("messages")[-1] if state.get("messages") else "")
+    )
+    return {"question": question.strip()}
+
+
+def extract_answer(state: dict) -> dict:
+    generation = state.get("generation")
+
+    if hasattr(generation, "content"):
+        generation = generation.content  # ✅ unwrap AIMessage
+
+    match = re.search(r"<ANSWER>(.*?)</ANSWER>", generation or "", re.DOTALL)
+    if match:
+        answer = match.group(1).strip()
+    else:
+        answer = generation or ""
+
+    return {"answer": answer}
+
+
 
 
 def retrieve(state: AgentState, config: GraphConfig) -> AgentState:
@@ -70,28 +90,19 @@ def retrieve_from_vector_db(state: AgentState, config: GraphConfig) -> AgentStat
                     unique_docs[doc_id] = doc
 
     results = list(unique_docs.values())
-
+    context = "\n\n".join([doc.page_content for doc in results])
     return {
         "documents": results,
+        "context": context
     }
 
+def generate_queries(state: dict) -> dict:
+    context = state.get("context", "")
+    question = state.get("question", "")
 
-def generate_queries(state: AgentState, config: GraphConfig) -> AgentState:
-    question = state["question"]
-    prompt = generate_queries_prompt_template.format(question=question)
-    response = llm.invoke(
-        input=format_prompt(prompt),
-        model=MODEL_NAME,
-        max_tokens=config["configurable"].get("max_tokens", 4096),
-        temperature=0,
-    )
-
-    queries = response.content.split("\n")
-    queries.append(question)  # add original question
-
-    return {
-        "queries": queries,
-    }
+    prompt = f"Context:\n{context}\n\nQuestion:\n{question}\nAnswer:"
+    response = llm.invoke(prompt)
+    return {"answer": response}
 
 
 def filter_context(state: AgentState, config: GraphConfig) -> AgentState:
@@ -102,15 +113,15 @@ def filter_context(state: AgentState, config: GraphConfig) -> AgentState:
         question=question, documents=format_docs(documents)
     )
     response = llm.invoke(
-        input=format_prompt(prompt),
-        model=MODEL_NAME,
-        max_tokens=config["configurable"].get("max_tokens", 4096),
-        temperature=0,
+        input=prompt,
+        #model=MODEL_NAME,
+        #max_tokens=config["configurable"].get("max_tokens", 4096),
+       # temperature=0,
     )
-    response_text = response.content.replace("<OUTPUT>", "").replace("</OUTPUT>", "")
+    response_text = response.replace("<OUTPUT>", "").replace("</OUTPUT>", "")
 
     try:
-        context, sources = re.split(
+        context, sources = ee.split(
             "sources:", response_text, flags=re.IGNORECASE, maxsplit=1
         )
         context = context.strip()
@@ -145,7 +156,7 @@ def rerank(state: AgentState, config: GraphConfig) -> AgentState:
 
     response = co.rerank(
         model="rerank-english-v3.0",
-        query=state["question"],
+        query=question,
         documents=docs,
         top_n=config["configurable"].get("rerank_k", 3),
     )
@@ -182,17 +193,17 @@ def generate(state: AgentState, config: GraphConfig) -> AgentState:
         response_message = AIMessage("[GENERATION DISABLED]")
     else:
         response = llm.invoke(
-            model=MODEL_NAME,
-            input=format_prompt(prompt),
-            max_tokens=config["configurable"].get("max_tokens", 4096),
-            temperature=config["configurable"].get("temperature", 0.0),
-            top_p=config["configurable"].get("top_p", 0.9),
+           # model=MODEL_NAME,
+            input=prompt,
+          #  max_tokens=config["configurable"].get("max_tokens", 4096),
+          #  temperature=config["configurable"].get("temperature", 0.0),
+          #  top_p=config["configurable"].get("top_p", 0.9),
         )
-        response_message = AIMessage(response.content)
+        response_message = AIMessage(response)
 
     return {
         "prompt": prompt,
-        "generation": response_message.content,
+        "generation": response_message,
     }
 
 
@@ -240,7 +251,8 @@ def extract_answer(state: AgentState) -> AgentState:
         )
         print(f"Extracting answer using LLM... {prompt}")
         extracted_answer = llm.invoke(
-            model=MODEL_NAME, input=format_prompt(prompt), max_tokens=100
+            #model=MODEL_NAME, input=format_prompt(prompt), max_tokens=100
+           input=prompt
         ).content
         extracted_answer = extracted_answer.replace("<OUTPUT>", "").replace(
             "</OUTPUT>", ""

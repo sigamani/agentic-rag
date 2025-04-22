@@ -65,7 +65,8 @@ def correctness_score(input_q, predicted, expected):
     prompt = eval_prompt_template.format(
         question=input_q, actual_answer=predicted, expected_answer=expected
     )
-    out = llm.invoke([HumanMessage(content=format_prompt(prompt))])
+    #out = llm.invoke([HumanMessage(content=format_prompt(prompt))])
+    out = llm.invoke(format_prompt(prompt))
     try:
         return abs(float(out.content.strip().replace("<OUTPUT>", "").replace("</OUTPUT>", "")))
     except:
@@ -101,8 +102,8 @@ def run_eval():
         expected = item.outputs["answer"]
         expected_doc_id = item.metadata["document"]["id"]
 
-        inputs = {"messages": [HumanMessage(content=question)]}
-
+        #inputs = {"messages": [HumanMessage(content=question)]}
+        inputs = {"question": question} 
         start = time.time()
         output = graph.invoke(
             inputs,
@@ -113,12 +114,12 @@ def run_eval():
         answer = output["answer"]
         generation = output.get("generation", "")
         retrieved_doc_ids = [doc.metadata["id"] for doc in output.get("documents", [])]
-        reranked_doc_ids = [doc.metadata["id"] for doc in output.get("reranked_documents", [])]
+        #reranked_doc_ids = [doc.metadata["id"] for doc in output.get("reranked_documents", [])]
 
         retrieval_precision = retrieval_precision_score(retrieved_doc_ids, expected_doc_id)
         retrieval_recall = retrieval_recall_score(retrieved_doc_ids, expected_doc_id)
-        reranker_precision = retrieval_precision_score(reranked_doc_ids, expected_doc_id)
-        reranker_recall = retrieval_recall_score(reranked_doc_ids, expected_doc_id)
+        #reranker_precision = retrieval_precision_score(reranked_doc_ids, expected_doc_id)
+       # reranker_recall = retrieval_recall_score(reranked_doc_ids, expected_doc_id)
         correctness = correctness_score(question, answer, expected)
 
         program = output.get("program", "")
@@ -133,8 +134,8 @@ def run_eval():
             "correctness": correctness,
             "retrieval_precision": retrieval_precision,
             "retrieval_recall": retrieval_recall,
-            "reranker_precision": reranker_precision,
-            "reranker_recall": reranker_recall,
+           # "reranker_precision": reranker_precision,
+           # "reranker_recall": reranker_recall,
             "program_accuracy": program_acc,
             "execution_accuracy": exec_acc,
             "latency": latency,
@@ -145,7 +146,7 @@ def run_eval():
 
     df = pd.DataFrame(records)
     df.to_csv("eval.csv", quoting=csv.QUOTE_NONNUMERIC)
-    print("~\~E Evaluation complete. Results saved to eval.csv")
+    print("Evaluation complete. Results saved to eval.csv")
     print("Average Program Accuracy:", df["program_accuracy"].mean())
     print("Average Execution Accuracy:", df["execution_accuracy"].mean())
     print("Mean Latency:", df["latency"].mean(), "s")
