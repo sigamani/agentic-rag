@@ -3,7 +3,7 @@ from langsmith import traceable
 from langchain_core.messages import HumanMessage
  
 
-MODEL_NAME = "hf.co/mradermacher/tat-llm-7b-fft-i1-GGUF:Q4_K_S"
+MODEL_NAME = "hf.co/mradermacher/tat-llm-7b-fft-i1-GGUF:Q4_K_M"
 # Initialize the model
 llm = OllamaLLM(model=MODEL_NAME)
 

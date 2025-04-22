@@ -1,5 +1,41 @@
 from langchain.prompts import PromptTemplate
 
+
+# Usage:
+# normalized_prompt = normalize_facts_prompt.format(table_json=json.dumps(sample_table, indent=2))
+normalize_facts_prompt = PromptTemplate(
+    input_variables=["table_json"],
+    template="""
+        You are a financial document parser.
+
+        You will receive a JSON object representing a table extracted from a financial report. The table is accompanied by `pre_text` and `post_text` — context paragraphs surrounding the table in the original document.
+
+        Your task is to extract a list of normalized financial facts from the table.
+
+        For each relevant cell in the table:
+        - Determine the **type of metric** (e.g., Revenue, EPS, Margin, Assets) using column headers.
+        - Extract the **numerical value**, and normalize it to **standard scientific notation** with 2 decimal places and 3 significant figures (e.g., "3.40E-1" for 0.34).
+        - Infer the **unit** (e.g., USD, %, EPS, Billion) using the header or cell text.
+        - Determine the **time** the value refers to. This is often encoded in row headers (e.g., “Q1”, “2020”, or “March 2021”).
+        - Choose the most relevant sentence from `pre_text` or `post_text` that mentions or helps explain this value.
+
+        Return a list of JSON objects. Each object should have the following fields:
+        - "id": A unique identifier composed from the base "id" and row/column info (e.g., "ABC/2020/page_5.pdf-Row2-Revenue").
+        - "type": The name of the metric (e.g., "Revenue").
+        - "value": The value in scientific notation (e.g., "1.20E+9").
+        - "unit": The unit associated (e.g., "USD").
+        - "time": A universal date like "2020-01-01" or "2020-Q1".
+        - "description": The best sentence from the context.
+
+### Input JSON
+        {table_json}
+
+        Return only valid JSON.
+        """
+)
+
+
+
 # Prompt
 reason_and_answer_prompt_template = PromptTemplate(
     template="""You are an investment analyst. You will be given: 
