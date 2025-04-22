@@ -7,12 +7,13 @@ from tqdm import tqdm
 
 llm = OllamaLLM(model="mistral")
 
+
 def format_prompt(entry):
     doc_id = entry.get("id", "")
     pre_text = entry.get("pre_text", "")
     post_text = entry.get("post_text", "")
     table = entry.get("table_ori", entry.get("table", []))
-    
+
     # Heuristic date extraction from filename
     year_part = "Unknown Date"
     if "/" in doc_id:
@@ -49,8 +50,9 @@ Table:
 {table_str}
 """
 
+
 def main(input_path, output_path, max_examples=5):
-    with open(input_path, 'r') as f:
+    with open(input_path, "r") as f:
         data = json.load(f)
 
     results = []
@@ -59,28 +61,26 @@ def main(input_path, output_path, max_examples=5):
         response = llm.invoke(prompt)
         try:
             parsed = json.loads(response)
-            results.append({
-                "id": entry["id"],
-                "extracted": parsed
-            })
+            results.append({"id": entry["id"], "extracted": parsed})
         except Exception as e:
-            results.append({
-                "id": entry["id"],
-                "error": str(e),
-                "raw_response": response
-            })
+            results.append(
+                {"id": entry["id"], "error": str(e), "raw_response": response}
+            )
 
-    with open(output_path, 'w') as f:
+    with open(output_path, "w") as f:
         for r in results:
             f.write(json.dumps(r) + "\n")
     print(f"✅ Saved {len(results)} entries to {output_path}")
 
+
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_file", type=str, required=True)
-    parser.add_argument("--output_file", type=str, default="llm_extracted_results.jsonl")
+    parser.add_argument(
+        "--output_file", type=str, default="llm_extracted_results.jsonl"
+    )
     parser.add_argument("--max_examples", type=int, default=5)
     args = parser.parse_args()
     main(args.input_file, args.output_file, args.max_examples)
-

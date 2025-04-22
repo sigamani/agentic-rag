@@ -6,19 +6,38 @@ from typing import Dict, List, Union
 import json
 from collections import defaultdict
 from typing import List
-from utils import format_document, extract_numbers  # Assuming these are defined elsewhere
+from utils import (
+    format_document,
+    extract_numbers,
+)  # Assuming these are defined elsewhere
 
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
 
-def load_chroma_vector_store(persist_dir: str = "chroma_index", embedding_model: str = "nomic-embed-text"):
+
+def load_chroma_vector_store(
+    persist_dir: str = "chroma_index", embedding_model: str = "nomic-embed-text"
+):
     embeddings = OllamaEmbeddings(model=embedding_model)
     vectordb = Chroma(persist_directory=persist_dir, embedding_function=embeddings)
     print(f"✅ Loaded vector store from {persist_dir}")
     return vectordb
 
+
+import json
+from collections import defaultdict
+from typing import List
+from langchain_core.documents import Document
+from utils import (
+    format_document,
+    extract_numbers,
+)  # Assuming these are defined elsewhere
+
+
 class RelevantDocumentRetriever:
-    def _create_question_to_document_map(self, filepath: str, limit: int = None) -> dict[str, List[Document]]:
+    def _create_question_to_document_map(
+        self, filepath: str, limit: int = None
+    ) -> dict[str, List[Document]]:
         q2d = defaultdict(list)
         with open(filepath, "r") as f:
             data = json.load(f)
@@ -35,19 +54,26 @@ class RelevantDocumentRetriever:
 
         return q2d
 
-    def __init__(self, data_path: str, limit: int = None, retriever_name: str = "default"):
+    def __init__(
+        self, data_path: str, limit: int = None, retriever_name: str = "default"
+    ):
         self.retriever_name = retriever_name
         self.q2d = self._create_question_to_document_map(data_path, limit=limit)
 
     def __call__(self, question: str, top_k: int = 10) -> List[Document]:
         return self.query(question, top_k=top_k)
 
-    def query(self, question: str, top_k: int = 10, rerank_with_numeric: bool = True) -> List[Document]:
+    def query(
+        self, question: str, top_k: int = 10, rerank_with_numeric: bool = True
+    ) -> List[Document]:
         docs = self.q2d.get(question, [])[:top_k]
 
         if rerank_with_numeric:
             q_nums = extract_numbers(question)
-            docs.sort(key=lambda d: len(q_nums & extract_numbers(d.page_content)), reverse=True)
+            docs.sort(
+                key=lambda d: len(q_nums & extract_numbers(d.page_content)),
+                reverse=True,
+            )
 
         return docs[:top_k]
 
@@ -88,7 +114,9 @@ def retrieve_from_vector_db(
     if not results:
         print(f"⚠️ No documents retrieved for queries: {queries}")
 
-    context = "\n\n".join([doc.page_content for doc in results]) or "NO_CONTEXT_AVAILABLE"
+    context = (
+        "\n\n".join([doc.page_content for doc in results]) or "NO_CONTEXT_AVAILABLE"
+    )
 
     return {
         "documents": results,
