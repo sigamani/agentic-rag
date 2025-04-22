@@ -1,74 +1,85 @@
-# pip install "trl==0.4.7" "transformers==4.36.2"
+import json
 import torch
-from unsloth import FastLanguageModel
-from datasets import load_dataset
 from transformers import TrainingArguments
 from trl import SFTTrainer
+from unsloth import FastLanguageModel
+from datasets import Dataset
 
-# Load the model and tokenizer
+# === Load and Filter ===
+with open("data/train_turn_small.json", "r") as f:
+    raw_data = [json.loads(line) if isinstance(line, str) else line for line in f]
+
+def is_valid(example):
+    return (
+        "qa" in example and
+        "exe_ans" in example["qa"] and
+        isinstance(example["qa"]["exe_ans"], str) and
+        example["qa"]["exe_ans"].strip() != ""
+    )
+
+def format_with_cot(example):
+    history = " ".join(example.get("cur_dial", []))
+    question = example["qa"].get("question", "")
+    answer = example["qa"].get("exe_ans", "")
+    gold_program = example["qa"].get("program_re", example["qa"].get("program", ""))
+
+    return {
+        "instruction": "Answer the financial question using step-by-step reasoning.",
+        "input": f"{history}\n\nQuestion: {question}".strip(),
+        "output": f"Let's think step by step.\nProgram: {gold_program}\nAnswer: {answer}"
+    }
+
+filtered = list(filter(is_valid, raw_data))
+formatted = list(map(format_with_cot, filtered))
+dataset = Dataset.from_list(formatted)
+
+print(f"[✅ DEBUG] Loaded {len(dataset)} formatted examples")
+
+# === Load Base Model ===
 model, tokenizer = FastLanguageModel.from_pretrained(
     model_name="./merged_tat_llm_fp16",
     max_seq_length=4096,
-    dtype=torch.bfloat16,  # Use bfloat16 as recommended by Unsloth
+    dtype=torch.bfloat16,
     load_in_4bit=True,
 )
 
-# Prepare the dataset
-dataset = load_dataset("json", data_files="/workspace/fine-tuning/convfinqa_sft_axolotl.jsonl", split="train")
-
-# Define a prompt template
-def format_example(example):
-    prompt = f"""### Instruction:
-{example['instruction']}
-
-### Input:
-{example['input']}
-
-### Response:
-{example['output']}"""
-    example["text"] = prompt
-    return example
-
-dataset = dataset.map(format_example)
-
-# Apply LoRA configuration directly via get_peft_model
+# === Apply LoRA ===
 model = FastLanguageModel.get_peft_model(
     model,
     r=16,
     lora_alpha=32,
-    lora_dropout=0.0,  # Set to 0 for optimized patching
+    lora_dropout=0.0,
     target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
     bias="none",
-    use_gradient_checkpointing="unsloth",  # Enable Unsloth's gradient checkpointing
+    use_gradient_checkpointing="unsloth",
     random_state=42,
 )
 
-# Define training arguments
+# === Training Arguments ===
 training_args = TrainingArguments(
-    output_dir="tat_llm_convfinqa",
+    output_dir="tat_llm_convfinqa_cot",
     per_device_train_batch_size=4,
     gradient_accumulation_steps=8,
     num_train_epochs=3,
     learning_rate=2e-5,
-    bf16=True,  # Use bfloat16 for training
-    logging_steps=10,
-    save_steps=100,
+    bf16=True,
+    logging_steps=1,
+    save_steps=25,
     save_total_limit=2,
     evaluation_strategy="no",
 )
 
-# Initialize the trainer
+# === Trainer ===
 trainer = SFTTrainer(
     model=model,
     train_dataset=dataset,
-    dataset_text_field="text",
     tokenizer=tokenizer,
+    dataset_text_field="text",
     args=training_args,
 )
 
-# Start training
 trainer.train()
 
-# Save the fine-tuned model
-model.save_pretrained("tat_llm_convfinqa")
-tokenizer.save_pretrained("tat_llm_convfinqa") 
+# === Save Final Model ===
+model.save_pretrained("tat_llm_convfinqa_cot")
+tokenizer.save_pretrained("tat_llm_convfinqa_cot")
