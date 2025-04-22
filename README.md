@@ -1,21 +1,4 @@
 # OSCAR: ConvFinQA: Finetuning and Evaluating a Chain-of-Thought LLM on Financial QA
-
-This repository contains the full pipeline for fine-tuning a LLaMA-style model using chain-of-thought supervision on [ConvFinQA-style](https://github.com/sigamani/ConvFinQA2) financial reasoning tasks. It includes curriculum-generated data, a LoRA fine-tuning pipeline, and LangGraph-based program execution evaluation.
-
----
-
-## 📁 Project Structure
-ConvFinQA3/
-├── configs/                # YAML-based training config
-├── data/                   # Curriculum or supervised examples
-├── eval/                   # Evaluation: retrieval + reasoning accuracy
-├── models/                 # Model + LoRA helpers
-├── retrieval/              # Hybrid retriever logic
-├── scripts/                # Training and inference scripts
-├── requirements.txt
-├── README.md
-└── report.pdf
-
 ---
 
 ## 🧠 Objective
@@ -75,13 +58,12 @@ This runs the model’s output program over retrieved tables and compares with g
 ```python scripts/fine_tune.py --config configs/config_finetune.yaml```
 
 This will:
-	•	Load a quantised model (e.g. from Hugging Face or local GGUF)
-	•	Apply LoRA adapters
-	•	Train on the dataset with reasoning supervision
-	•	Save merged model + logs to checkpoints/
+- Load a quantised model (e.g. from Hugging Face or local GGUF)
+- Apply LoRA adapters
+- Train on the dataset with reasoning supervision
+- Save merged model + logs to checkpoints/
 
 ⸻
-
 
 ## 🔍 Inference
 
@@ -109,8 +91,8 @@ lora_dropout: 0.05
 ⸻
 
 📚 Citation & Credits
-	•	Built using Hugging Face Transformers, PEFT, and LangGraph.
-	•	Dataset adapted from ConvFinQA by TheFinAI + curriculum-generated CoT data.
+- Built using Hugging Face Transformers, PEFT, and LangGraph.
+- Dataset adapted from ConvFinQA by TheFinAI + curriculum-generated CoT data.
 
 ⸻
 
