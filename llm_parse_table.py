@@ -12,29 +12,38 @@ def format_prompt(entry):
     pre_text = entry.get("pre_text", "")
     post_text = entry.get("post_text", "")
     table = entry.get("table_ori", entry.get("table", []))
-    date = entry.get("paragraph", "") or "Unknown Date"
+    
+    # Heuristic date extraction from filename
+    year_part = "Unknown Date"
+    if "/" in doc_id:
+        parts = doc_id.split("/")
+        for part in parts:
+            if part.isdigit() and len(part) == 4:
+                year_part = f"{part}-12-31"
+                break
+
     table_str = json.dumps(table, indent=2)
 
     return f"""You are an information extraction agent.
 
-    Given a financial table and context, extract each value into a structured JSON object with the following keys:
-    - id: "<sluggified doc_id and row_number>"
-    - name: "<field_name>"
-    - value: "<scientific_notation_float>"
-    - type: "float"
-    - unit: "currency"
-    - date: "{date}"
-    - row: <int>
-    - description: "A summary based on pre_text and post_text"
-    - metadata: Relevant text from pre_text and post_text which are linked to the numeric values in the tables
+Given a financial table and context, extract each value into a structured JSON object with the following keys:
+- id: "<sluggified doc_id and row_number>"
+- name: "<field_name>"
+- value: "<scientific_notation_float>"
+- type: "float"
+- unit: "currency"
+- date: "{year_part}"
+- row: <int>
+- description: "A summary based on pre_text and post_text"
+- metadata: Summarisation of relevant chunks from pre_text and post_text
 
-    Respond with a JSON array of objects, one per data value.
+Respond with a JSON array of objects, one per data value.
 
-    Context:
-    - ID: {doc_id}
-    - Pre-text: "{pre_text}"
-    - Post-text: "{post_text}"
-    - Date: "{date}"
+Context:
+- ID: {doc_id}
+- Pre-text: "{pre_text}"
+- Post-text: "{post_text}"
+- Date: "{year_part}"
 
 Table:
 {table_str}

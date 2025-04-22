@@ -3,6 +3,11 @@ from langchain_core.documents import Document
 
 from config import GraphConfig
 
+import re
+
+def extract_numbers(text):
+    """Extracts all numeric values from a string and returns them as a set of strings."""
+    return set(re.findall(r"\\d+(?:\\.\\d+)?", text))
 
 def format_document(entry: dict) -> Document:
     """

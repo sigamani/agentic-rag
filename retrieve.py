@@ -8,6 +8,14 @@ from collections import defaultdict
 from typing import List
 from utils import format_document, extract_numbers  # Assuming these are defined elsewhere
 
+from langchain_community.embeddings import OllamaEmbeddings
+from langchain_community.vectorstores import Chroma
+
+def load_chroma_vector_store(persist_dir: str = "chroma_index", embedding_model: str = "nomic-embed-text"):
+    embeddings = OllamaEmbeddings(model=embedding_model)
+    vectordb = Chroma(persist_directory=persist_dir, embedding_function=embeddings)
+    print(f"✅ Loaded vector store from {persist_dir}")
+    return vectordb
 
 class RelevantDocumentRetriever:
     def _create_question_to_document_map(self, filepath: str, limit: int = None) -> dict[str, List[Document]]:
