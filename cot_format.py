@@ -22,4 +22,5 @@ def format_with_cot(example):
         "output": f"Let's think step by step.\nProgram: {gold_program}\nAnswer: {answer}"
     }
 formatted = dataset.map(format_with_cot)
+dataset = dataset.filter(lambda ex: "qa" in ex and "exe_ans" in ex["qa"])
 print(formatted[0])
