@@ -1,3 +1,4 @@
+# pip install "trl==0.4.7" "transformers==4.36.2"
 import torch
 from unsloth import FastLanguageModel, PatchTrainer
 from datasets import load_dataset
