@@ -6,8 +6,12 @@ from unsloth import FastLanguageModel
 from datasets import Dataset
 
 # === Load and Filter ===
-with open("data/train_turn_small.json", "r") as f:
-    raw_data = [json.loads(line) if isinstance(line, str) else line for line in f]
+with open("data/train_turn.json", "r") as f:
+    try:
+        raw_data = json.load(f)  # For full JSON object or list
+    except json.JSONDecodeError:
+        f.seek(0)
+        raw_data = [json.loads(line) for line in f if line.strip()]  # For JSONL fallback
 
 def is_valid(example):
     return (
@@ -33,11 +37,27 @@ filtered = list(filter(is_valid, raw_data))
 formatted = list(map(format_with_cot, filtered))
 dataset = Dataset.from_list(formatted)
 
+# Add a combined 'text' field that SFTTrainer expects
+def merge_fields(example):
+    example["text"] = f"""
+    ### Instruction:
+    {example['instruction']}
+
+    ### Input:
+    {example['input']}
+
+    ### Response:
+    {example['output']}
+    """
+    return example
+
+dataset = dataset.map(merge_fields)
+
 print(f"[✅ DEBUG] Loaded {len(dataset)} formatted examples")
 
 # === Load Base Model ===
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name="./merged_tat_llm_fp16",
+    model_name="../ConvFinQA2/merged_tat_llm_fp16",
     max_seq_length=4096,
     dtype=torch.bfloat16,
     load_in_4bit=True,
@@ -66,7 +86,6 @@ training_args = TrainingArguments(
     logging_steps=1,
     save_steps=25,
     save_total_limit=2,
-    evaluation_strategy="no",
 )
 
 # === Trainer ===
@@ -74,7 +93,6 @@ trainer = SFTTrainer(
     model=model,
     train_dataset=dataset,
     tokenizer=tokenizer,
-    dataset_text_field="text",
     args=training_args,
 )
 
