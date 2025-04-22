@@ -3,7 +3,7 @@ from peft import PeftModel
 import torch
 import os
 
-BASE_MODEL = "meta-llama/Llama-2-7b-hf"           # Requires HF auth
+BASE_MODEL = "NousResearch/Llama-2-7b-hf"           # Requires HF auth
 LORA_ADAPTER = "next-tat/tat-llm-7b-lora"
 MERGED_SAVE_PATH = "./merged_tat_llm_fp16"
 

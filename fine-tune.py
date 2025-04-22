@@ -80,7 +80,7 @@ print(f"[✅ DEBUG] Loaded {len(dataset)} formatted examples")
 
 # === Load Base Model ===
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name="../ConvFinQA2/merged_tat_llm_fp16",
+    model_name="./merged_tat_llm_fp16",
     max_seq_length=4096,
     dtype=torch.bfloat16,
     load_in_4bit=True,
