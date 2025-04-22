@@ -40,7 +40,6 @@ model = FastLanguageModel.get_peft_model(
     lora_dropout=0.0,
     target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
     bias="none",
-    task_type="CAUSAL_LM",
     use_gradient_checkpointing="unsloth",
     random_state=42,
 )
