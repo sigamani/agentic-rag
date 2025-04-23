@@ -15,32 +15,48 @@ with open("data/train_curated.jsonl", "r") as f:
 with open("data/dev_curated.jsonl", "r") as f:
     dev_data = [json.loads(line) for line in f if line.strip()]
 
+
+# === Curriculum partition by program length ===
+def categorize(example):
+    program = example.get("Program", "")
+    length = len(program.split())
+    if length < 5:
+        return "easy"
+    elif length < 15:
+        return "medium"
+    return "hard"
+
+categorized = {"easy": [], "medium": [], "hard": []}
+for ex in raw_data:
+    category = categorize(ex)
+    categorized[category].append(ex)
+
 def format_with_cot(example):
     reasoning_template = f"""
 You are a financial reasoning assistant.
 
-Given a question based on a financial report, think step-by-step to identify values and apply the correct calculation.
+Given a question based on a financial report (with pre-text, post-text, and table snippets), think step-by-step to identify the right values and apply the correct calculation.
 
 Always follow this format:
 
-Step 1: Rephrase the question  
-Step 2: Identify key values  
-Step 3: Apply operation  
-Step 4: Compute result  
-Final Answer: <float answer>
+Step 1: Rephrase the question for clarity.  
+Step 2: Identify key values from the table or context.  
+Step 3: Apply the correct operation (e.g., subtraction, percentage change).  
+Step 4: Compute the result.  
+Final Answer: <answer as a single number in float format>
 
 Question: {example['input']}
 
-Step 1: Let's rephrase the question  
-Step 2: Identify values  
-Step 3: We apply: {example.get('Program', '')}  
-Step 4: Compute  
-Final Answer: {example['Final Answer']}
+Step 1: Let's rephrase the question.  
+Step 2: We need to find relevant values.  
+Step 3: We apply: {example.get("Program", "")}  
+Step 4: Result of calculation.  
+Final Answer: {example.get("Final Answer", "")}
 """
     return {
         "instruction": example["instruction"],
-        "input": f"Question: {example['input']}",
-        "output": reasoning_template
+        "input": example["input"],
+        "output": reasoning_template,
     }
 
 def merge_fields(example):
@@ -58,6 +74,15 @@ def merge_fields(example):
 
 train_dataset = Dataset.from_list(list(map(format_with_cot, raw_data))).map(merge_fields)
 dev_dataset = Dataset.from_list(list(map(format_with_cot, dev_data))).map(merge_fields)
+
+# Apply formatting + merging
+datasets = {}
+for k in categorized:
+    formatted = list(map(format_with_cot, categorized[k]))
+    ds = Dataset.from_list(formatted).map(merge_fields)
+    datasets[k] = ds
+
+print(f"[✅ DEBUG] Easy: {len(datasets['easy'])} | Medium: {len(datasets['medium'])} | Hard: {len(datasets['hard'])}")
 
 # === Load Base Model ===
 model, tokenizer = FastLanguageModel.from_pretrained(
@@ -91,8 +116,12 @@ training_args = TrainingArguments(
     save_total_limit=2,
     report_to="none",
 )
+# 🔧 Enable logits for training
+import os
+os.environ['UNSLOTH_RETURN_LOGITS'] = '1'
 
-os.environ["UNSLOTH_RETURN_LOGITS"] = "1"
+# === Curriculum loop over epochs ===
+curriculum = [("easy", 1), ("medium", 1), ("hard", 1)]
 
 trainer = SFTTrainer(
     model=model,
@@ -138,3 +167,28 @@ print(f"[FINAL EVAL] => Loss: {final_eval['eval_loss']:.4f}")
 # === Save ===
 model.save_pretrained("tat_llm_convfinqa_cot")
 tokenizer.save_pretrained("tat_llm_convfinqa_cot")
+#=======
+for phase, epochs in curriculum:
+    print(f"\n📚 Training on {phase} set for {epochs} epoch(s)...")
+    training_args = TrainingArguments(
+        output_dir=f"tat_llm_{phase}",
+        per_device_train_batch_size=4,
+        gradient_accumulation_steps=8,
+        num_train_epochs=epochs,
+        learning_rate=2e-5,
+        bf16=True,
+        logging_steps=1,
+        save_steps=25,
+        save_total_limit=2,
+    )
+    trainer = SFTTrainer(
+        model=model,
+        train_dataset=datasets[phase],
+        tokenizer=tokenizer,
+        args=training_args,
+    )
+    trainer.train()
+
+# === Save Final Model ===
+model.save_pretrained("tat_llm_convfinqa_curriculum")
+tokenizer.save_pretrained("tat_llm_convfinqa_curriculum")
