@@ -1,64 +1,57 @@
 import json
-import os
 import torch
 from transformers import TrainingArguments
 from trl import SFTTrainer
 from unsloth import FastLanguageModel
 from datasets import Dataset
 
-# === Load Curriculum Data ===
-with open("data/curriculum_generated.jsonl", "r") as f:
+# === Load and Filter ===
+with open("data/train_curated.jsonl", "r") as f:
     raw_data = [json.loads(line) for line in f if line.strip()]
 
-def classify_difficulty(example):
+# === Curriculum partition by program length ===
+def categorize(example):
     program = example.get("Program", "")
     length = len(program.split())
-    if length <= 5:
+    if length < 5:
         return "easy"
-    elif length <= 12:
+    elif length < 15:
         return "medium"
-    else:
-        return "hard"
+    return "hard"
 
-def format_example(example):
-    program = example.get("Program", "")
-    answer = example.get("Final Answer", "")
-    question = example.get("input", "")
-    instruction = example.get("instruction", "")
+categorized = {"easy": [], "medium": [], "hard": []}
+for ex in raw_data:
+    category = categorize(ex)
+    categorized[category].append(ex)
 
-    reasoning = f"""
+# === Format and convert to dataset ===
+def format_with_cot(example):
+    reasoning_template = f"""
 You are a financial reasoning assistant.
 
-Given a question based on a financial report, think step-by-step to identify the right values and apply the correct calculation.
+Given a question based on a financial report (with pre-text, post-text, and table snippets), think step-by-step to identify the right values and apply the correct calculation.
 
 Always follow this format:
+
 Step 1: Rephrase the question for clarity.  
 Step 2: Identify key values from the table or context.  
 Step 3: Apply the correct operation (e.g., subtraction, percentage change).  
 Step 4: Compute the result.  
 Final Answer: <answer as a single number in float format>
 
-Question: {question}
+Question: {example['input']}
 
 Step 1: Let's rephrase the question.  
 Step 2: We need to find relevant values.  
-Step 3: We apply: {program}  
+Step 3: We apply: {example.get("Program", "")}  
 Step 4: Result of calculation.  
-Final Answer: {answer}
+Final Answer: {example.get("Final Answer", "")}
 """
     return {
-        "instruction": instruction,
-        "input": question,
-        "output": reasoning,
-        "difficulty": classify_difficulty(example)
+        "instruction": example["instruction"],
+        "input": example["input"],
+        "output": reasoning_template,
     }
-
-formatted = list(map(format_example, raw_data))
-
-# === Split by Difficulty ===
-easy = Dataset.from_list([ex for ex in formatted if ex["difficulty"] == "easy"])
-medium = Dataset.from_list([ex for ex in formatted if ex["difficulty"] == "medium"])
-hard = Dataset.from_list([ex for ex in formatted if ex["difficulty"] == "hard"])
 
 def merge_fields(example):
     example["text"] = f"""
@@ -73,11 +66,14 @@ def merge_fields(example):
 """
     return example
 
-easy = easy.map(merge_fields)
-medium = medium.map(merge_fields)
-hard = hard.map(merge_fields)
+# Apply formatting + merging
+datasets = {}
+for k in categorized:
+    formatted = list(map(format_with_cot, categorized[k]))
+    ds = Dataset.from_list(formatted).map(merge_fields)
+    datasets[k] = ds
 
-print(f"[✅ Loaded] {len(easy)} easy, {len(medium)} medium, {len(hard)} hard examples")
+print(f"[✅ DEBUG] Easy: {len(datasets['easy'])} | Medium: {len(datasets['medium'])} | Hard: {len(datasets['hard'])}")
 
 # === Load Base Model ===
 model, tokenizer = FastLanguageModel.from_pretrained(
@@ -99,36 +95,34 @@ model = FastLanguageModel.get_peft_model(
     random_state=42,
 )
 
-# === Training Arguments ===
-training_args = TrainingArguments(
-    output_dir="tat_llm_curriculum",
-    per_device_train_batch_size=4,
-    gradient_accumulation_steps=8,
-    learning_rate=2e-5,
-    bf16=True,
-    logging_steps=1,
-    save_steps=25,
-    save_total_limit=2,
-)
+# 🔧 Enable logits for training
+import os
+os.environ['UNSLOTH_RETURN_LOGITS'] = '1'
 
-os.environ["UNSLOTH_RETURN_LOGITS"] = "1"
+# === Curriculum loop over epochs ===
+curriculum = [("easy", 1), ("medium", 1), ("hard", 1)]
 
-# === Training Loop with Curriculum ===
-def run_stage(name, dataset, epochs):
-    print(f"[🎯 Training {name.upper()} set for {epochs} epoch(s)]")
+for phase, epochs in curriculum:
+    print(f"\n📚 Training on {phase} set for {epochs} epoch(s)...")
+    training_args = TrainingArguments(
+        output_dir=f"tat_llm_{phase}",
+        per_device_train_batch_size=4,
+        gradient_accumulation_steps=8,
+        num_train_epochs=epochs,
+        learning_rate=2e-5,
+        bf16=True,
+        logging_steps=1,
+        save_steps=25,
+        save_total_limit=2,
+    )
     trainer = SFTTrainer(
         model=model,
-        train_dataset=dataset,
+        train_dataset=datasets[phase],
         tokenizer=tokenizer,
         args=training_args,
     )
-    trainer.args.num_train_epochs = epochs
     trainer.train()
 
-run_stage("easy", easy, 1)
-run_stage("medium", medium, 1)
-run_stage("hard", hard, 1)
-
 # === Save Final Model ===
-model.save_pretrained("tat_llm_curriculum")
-tokenizer.save_pretrained("tat_llm_curriculum")
+model.save_pretrained("tat_llm_convfinqa_curriculum")
+tokenizer.save_pretrained("tat_llm_convfinqa_curriculum")
