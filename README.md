@@ -1,4 +1,8 @@
 # OSCAR: Optimized Structured Conversational Answers for Reasoning 
+
+🧸 “Oscar” is also the lovable grouch from Sesame Street—memorable and kid-themed 
+📊 Emphasizes structure, conversation, and reasoning—perfect for ConvFinQA-style multiturn datasets
+
 ---
 
 ## 🧠 Objective
@@ -115,11 +119,6 @@ lora_dropout: 0.05
 - Built using Hugging Face Transformers, PEFT, and LangGraph.
 - Dataset adapted from ConvFinQA by TheFinAI + curriculum-generated CoT data.
 
----
-## OSCAR
-🧠 Hints at financial “awards” (like the Oscars), aligning with high-quality reasoning
-🧸 “Oscar” is also the lovable grouch from Sesame Street—memorable and kid-themed
-📊 Emphasizes structure, conversation, and reasoning—perfect for ConvFinQA-style multiturn datasets
 ---
 ## 🛠️ Maintainer
 
