@@ -1,8 +1,7 @@
 # OSCAR: Optimized Structured Conversational Answers for Reasoning 
 
-🧸 “Oscar” is also the lovable grouch from Sesame Street—memorable and kid-themed 
 📊 Emphasizes structure, conversation, and reasoning—perfect for ConvFinQA-style multiturn datasets
-
+🧸 Oscar is also the lovable yet misunderstood grouch from Sesame Street
 ---
 
 ## 🧠 Objective
