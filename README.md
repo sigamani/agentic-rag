@@ -24,7 +24,7 @@ pip install -r requirements.txt
 
 ### 📂 Dataset
 
-We use the [**Oscar-ConvFinQA**](https://huggingface.co/datasets/michael-sigamani/Oscar-ConvFinQA) dataset, curated by Michael Sigamani. It is a cleaned and Chain-of-Thought (CoT) augmented version of ConvFinQA-style examples, created using teacher LLMs and schema-based curation.
+I use the [**Oscar-ConvFinQA**](https://huggingface.co/datasets/michael-sigamani/Oscar-ConvFinQA) dataset (because I like Sesame Street characteds).  It is a cleaned and Chain-of-Thought (CoT) augmented version of ConvFinQA-style examples, created using teacher LLMs and schema-based curation.
 
 Each entry in the dataset includes:
 ```json
