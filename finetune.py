@@ -93,6 +93,12 @@ def load_and_format_dataset(filepath):
         raw_data = [json.loads(line) for line in f if line.strip()]
 
     def format_with_cot(example):
+        final_answer_raw = example.get("Final Answer", "")
+        try:
+            final_answer_float = float(str(final_answer_raw).replace(",", "").replace("%", "e-2").replace("$", "").strip())
+        except:
+            final_answer_float = None  # fallback if conversion fails
+
         reasoning_template = f"""
 You are a financial reasoning assistant.
 
@@ -112,17 +118,18 @@ Step 1: Let's rephrase the question.
 Step 2: We need to find relevant values.  
 Step 3: We apply: {example.get('Program', '')}  
 Step 4: Result of calculation.  
-Final Answer: {example.get('Final Answer', '')}
+Final Answer: {final_answer_raw}
         """
         return {
             "instruction": example["instruction"],
             "input": example["input"],
             "output": reasoning_template,
-            "Final Answer": example.get("Final Answer", "")
+            "Final Answer": final_answer_float
         }
 
     formatted = list(map(format_with_cot, raw_data))
     return Dataset.from_list(formatted)
+    
 
 def merge_fields(example):
     example["text"] = f"""
