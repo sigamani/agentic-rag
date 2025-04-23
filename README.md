@@ -1,5 +1,4 @@
-# ConvFinQA: Fine-Tuning and Evaluating a Chain-of-Thought LLM for Financial QA
-
+# OSCAR: Optimized Structured Conversational Answers for Reasoning 
 ---
 
 ## 🧠 Objective
@@ -117,7 +116,11 @@ lora_dropout: 0.05
 - Dataset adapted from ConvFinQA by TheFinAI + curriculum-generated CoT data.
 
 ---
-
+## OSCAR
+🧠 Hints at financial “awards” (like the Oscars), aligning with high-quality reasoning
+🧸 “Oscar” is also the lovable grouch from Sesame Street—memorable and kid-themed
+📊 Emphasizes structure, conversation, and reasoning—perfect for ConvFinQA-style multiturn datasets
+---
 ## 🛠️ Maintainer
 
 Michael Sigamani  
