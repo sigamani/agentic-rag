@@ -5,7 +5,10 @@ from transformers import TrainingArguments
 from trl import SFTTrainer
 from unsloth import FastLanguageModel
 from datasets import Dataset
-from llm_eval_judge import evaluate_final_answer_accuracy_claude as evaluate_final_answer_accuracy
+from llm_eval_judge import (
+    evaluate_final_answer_accuracy_claude as evaluate_final_answer_accuracy,
+)
+
 
 # === Load and Format ===
 def load_and_format_dataset(filepath):
@@ -15,7 +18,13 @@ def load_and_format_dataset(filepath):
     def format_with_cot(example):
         final_answer_raw = example.get("Final Answer", "")
         try:
-            final_answer_float = float(str(final_answer_raw).replace(",", "").replace("%", "e-2").replace("$", "").strip())
+            final_answer_float = float(
+                str(final_answer_raw)
+                .replace(",", "")
+                .replace("%", "e-2")
+                .replace("$", "")
+                .strip()
+            )
         except:
             final_answer_float = None  # fallback if conversion fails
 
@@ -44,25 +53,12 @@ def load_and_format_dataset(filepath):
             "instruction": example["instruction"],
             "input": example["input"],
             "output": reasoning_template,
-            "Final Answer": final_answer_float
+            "Final Answer": final_answer_float,
         }
 
     formatted = list(map(format_with_cot, raw_data))
     return Dataset.from_list(formatted)
-    
 
-def merge_fields(example):
-    example["text"] = f"""
-	### Instruction:
-	{example['instruction']}
-
-	### Input:
-	{example['input']}
-
-	### Response:
-	{example['output']}
-    """
-    return example
 
 # === Load and Split Dataset with Difficulty Heuristic ===
 from curriculum_loader import load_and_split_dataset
@@ -102,7 +98,8 @@ training_args = TrainingArguments(
     save_total_limit=2,
 )
 
-os.environ['UNSLOTH_RETURN_LOGITS'] = '1'
+os.environ["UNSLOTH_RETURN_LOGITS"] = "1"
+
 
 # === Training Phases ===
 def train_segment(segment, label):
@@ -115,6 +112,7 @@ def train_segment(segment, label):
     )
     trainer.train()
     evaluate_final_answer_accuracy(segment, sample_size=100)
+
 
 train_segment(easy, "easy")
 train_segment(medium, "medium")
