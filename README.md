@@ -1,4 +1,4 @@
-# OSCAR: ConvFinQA: Finetuning and Evaluating a Chain-of-Thought LLM on Financial QA
+# ConvFinQA: Finetuning and Evaluating a Chain-of-Thought LLM on Financial QA
 ---
 
 ## 🧠 Objective
