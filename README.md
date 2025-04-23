@@ -22,12 +22,11 @@ pip install -r requirements.txt
 
 ---
 
-## 📝 Dataset
+### 📂 Dataset
 
-We use `curriculum_generated.jsonl` – a cleaned and CoT-augmented version of ConvFinQA-style examples, created via teacher LLMs and schema-based curation.
+We use the [**Oscar-ConvFinQA**](https://huggingface.co/datasets/michael-sigamani/Oscar-ConvFinQA) dataset, curated by Michael Sigamani. It is a cleaned and Chain-of-Thought (CoT) augmented version of ConvFinQA-style examples, created using teacher LLMs and schema-based curation.
 
-Each entry includes:
-
+Each entry in the dataset includes:
 ```json
 {
   "question": "...",
@@ -38,6 +37,8 @@ Each entry includes:
   "table": "..."
 }
 ```
+
+📌 Source: huggingface.co/datasets/michael-sigamani/Oscar-ConvFinQA
 
 ---
 
