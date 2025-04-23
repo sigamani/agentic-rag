@@ -1,12 +1,29 @@
 from langchain.tools import tool
 from pathlib import Path
 import json
+from typing import List, Dict
+from pydantic import BaseModel, ValidationError, Field
 
 try:
     from langsmith import traceable
 except ImportError:
     def traceable(func): return func
 
+# ------------------ Pydantic Schemas ------------------
+class ParsedTable(BaseModel):
+    fields: List[str]
+    values: List[Dict[str, float]]
+
+class ReasoningEntry(BaseModel):
+    id: str
+    reasoning: str
+    program: str
+
+class CuratedPayload(BaseModel):
+    approved: bool
+    entry: ReasoningEntry
+
+# ------------------ Utility Loader ------------------
 class DatasetLoader:
     def __init__(self, path: str):
         self.path = path
@@ -15,9 +32,11 @@ class DatasetLoader:
         with open(self.path, 'r') as f:
             return [json.loads(line) for line in f if line.strip()]
 
+# ------------------ Tool Functions ------------------
 @traceable
 @tool
 def load_dataset(input_path: str) -> dict:
+    """Load a JSONL file and return the first 3 examples for inspection."""
     loader = DatasetLoader(input_path)
     data = loader.load_jsonl()
     return {"data": data[:3], "count": len(data)}
@@ -25,6 +44,7 @@ def load_dataset(input_path: str) -> dict:
 @traceable
 @tool
 def parse_table_entry(entry: dict) -> dict:
+    """Mock parse a table entry to structured JSON with fields and yearly values."""
     parsed_table = {
         "fields": ["revenue", "net_income"],
         "values": [
@@ -32,32 +52,36 @@ def parse_table_entry(entry: dict) -> dict:
             {"year": 2022, "revenue": 1_450_000, "net_income": 310_000}
         ]
     }
+    try:
+        ParsedTable(**parsed_table)
+    except ValidationError as e:
+        return {"error": str(e)}
     return {"parsed_table": parsed_table, "id": entry.get("id", "example_1")}
 
 @traceable
 @tool
 def inject_chain_of_thought(parsed: dict) -> dict:
-    return {
+    """Inject reasoning and a DSL program for a parsed table entry."""
+    entry = {
         "id": parsed.get("id"),
         "reasoning": "Subtract last year net income from current, divide by last year to get growth %.",
         "program": "subtract(310000, 250000), divide(#0, 250000)"
     }
+    try:
+        ReasoningEntry(**entry)
+    except ValidationError as e:
+        return {"error": str(e)}
+    return entry
 
 @traceable
 @tool
 def curate_reasoning(entry: dict) -> dict:
-    program = entry.get("program", "")
-    if "subtract" in program and "divide" in program:
-        return {"approved": True, "entry": entry}
-    return {"approved": False, "reason": "Program too shallow"}
+    """Approve reasoning only if both 'subtract' and 'divide' are found in the DSL program."""
+    try:
+        parsed = ReasoningEntry(**entry)
+    except ValidationError:
+        return {"approved": False, "reason": "Validation failed"}
 
-@traceable
-@tool
-def save_curated_output(payload: dict) -> dict:
-    if not payload.get("approved"):
-        return {"status": "skipped"}
-    output_path = Path("curated_dataset.jsonl")
-    with open(output_path, "a") as f:
-        json.dump(payload["entry"], f)
-        f.write("\n")
-    return {"status": "written", "file": str(output_path)}
+    program = parsed.program
+    if "subtract" in program and "divide" in program:
+        return
