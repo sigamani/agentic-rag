@@ -53,29 +53,23 @@ def load_and_format_dataset(filepath):
 
 def merge_fields(example):
     example["text"] = f"""
-### Instruction:
-{example['instruction']}
+	### Instruction:
+	{example['instruction']}
 
-### Input:
-{example['input']}
+	### Input:
+	{example['input']}
 
-### Response:
-{example['output']}
+	### Response:
+	{example['output']}
     """
     return example
 
-# === Load Curriculum Segments ===
+# === Load and Split Dataset with Difficulty Heuristic ===
+from curriculum_loader import load_and_split_dataset
+
 data_path = "data/train_curated.jsonl"
-dataset = load_and_format_dataset(data_path)
+easy, medium, hard = load_and_split_dataset(data_path)
 
-# Sort by program length
-dataset = dataset.filter(lambda ex: "Program" in ex and ex["Program"])
-dataset = dataset.sort("Program", reverse=False, key=lambda x: len(x["Program"]))
-
-n = len(dataset)
-easy = dataset.select(range(int(0.33 * n))).map(merge_fields)
-medium = dataset.select(range(int(0.33 * n), int(0.66 * n))).map(merge_fields)
-hard = dataset.select(range(int(0.66 * n), n)).map(merge_fields)
 
 # === Load Model ===
 model, tokenizer = FastLanguageModel.from_pretrained(
