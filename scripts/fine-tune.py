@@ -5,78 +5,75 @@ from trl import SFTTrainer
 from unsloth import FastLanguageModel
 from datasets import Dataset
 
-
 # === Load and Filter ===
-with open("data/train_turn.json", "r") as f:
-    try:
-        raw_data = json.load(f)  # For full JSON object or list
-    except json.JSONDecodeError:
-        f.seek(0)
-        raw_data = [json.loads(line) for line in f if line.strip()]  # For JSONL fallback
+with open("data/train_curated.jsonl", "r") as f:
+    raw_data = [json.loads(line) for line in f if line.strip()]
 
-def is_valid(example):
-    return (
-        "qa" in example and
-        "exe_ans" in example["qa"] and
-        isinstance(example["qa"]["exe_ans"], str) and
-        example["qa"]["exe_ans"].strip() != ""
-    )
+# === Curriculum partition by program length ===
+def categorize(example):
+    program = example.get("Program", "")
+    length = len(program.split())
+    if length < 5:
+        return "easy"
+    elif length < 15:
+        return "medium"
+    return "hard"
 
+categorized = {"easy": [], "medium": [], "hard": []}
+for ex in raw_data:
+    category = categorize(ex)
+    categorized[category].append(ex)
+
+# === Format and convert to dataset ===
 def format_with_cot(example):
-    history = " ".join(example.get("cur_dial", []))
-    question = example["qa"].get("question", "")
-    answer = example["qa"].get("exe_ans", "")
-    gold_program = example["qa"].get("program_re", example["qa"].get("program", ""))
-
     reasoning_template = f"""
-	You are a financial reasoning assistant.
+You are a financial reasoning assistant.
 
-	Given a question based on a financial report (with pre-text, post-text, and table snippets), think step-by-step to identify the right values and apply the correct calculation.
+Given a question based on a financial report (with pre-text, post-text, and table snippets), think step-by-step to identify the right values and apply the correct calculation.
 
-	Always follow this format:
+Always follow this format:
 
-	Step 1: Rephrase the question for clarity.  
-	Step 2: Identify key values from the table or context.  
-	Step 3: Apply the correct operation (e.g., subtraction, percentage change).  
-	Step 4: Compute the result.  
-	Final Answer: <answer as a single number in float format>
+Step 1: Rephrase the question for clarity.  
+Step 2: Identify key values from the table or context.  
+Step 3: Apply the correct operation (e.g., subtraction, percentage change).  
+Step 4: Compute the result.  
+Final Answer: <answer as a single number in float format>
 
-	Question: {question}
+Question: {example['input']}
 
-	Step 1: Let's rephrase the question.  
-	Step 2: We need to find relevant values.  
-	Step 3: We apply: {gold_program}  
-	Step 4: Result of calculation.  
-	Final Answer: {answer}
-    """
+Step 1: Let's rephrase the question.  
+Step 2: We need to find relevant values.  
+Step 3: We apply: {example.get("Program", "")}  
+Step 4: Result of calculation.  
+Final Answer: {example.get("Final Answer", "")}
+"""
     return {
-        "instruction": "Answer the financial question using step-by-step reasoning.",
-        "input": f"{history}\n\nQuestion: {question}".strip(),
-        "output": reasoning_template
+        "instruction": example["instruction"],
+        "input": example["input"],
+        "output": reasoning_template,
     }
 
-
-filtered = list(filter(is_valid, raw_data))
-formatted = list(map(format_with_cot, filtered))
-dataset = Dataset.from_list(formatted)
-
-# Add a combined 'text' field that SFTTrainer expects
 def merge_fields(example):
     example["text"] = f"""
-    ### Instruction:
-    {example['instruction']}
+### Instruction:
+{example['instruction']}
 
-    ### Input:
-    {example['input']}
+### Input:
+{example['input']}
 
-    ### Response:
-    {example['output']}
-    """
+### Response:
+{example['output']}
+"""
     return example
 
-dataset = dataset.map(merge_fields)
+# Apply formatting + merging
+datasets = {}
+for k in categorized:
+    formatted = list(map(format_with_cot, categorized[k]))
+    ds = Dataset.from_list(formatted).map(merge_fields)
+    datasets[k] = ds
 
-print(f"[✅ DEBUG] Loaded {len(dataset)} formatted examples")
+print(f"[✅ DEBUG] Easy: {len(datasets['easy'])} | Medium: {len(datasets['medium'])} | Hard: {len(datasets['hard'])}")
 
 # === Load Base Model ===
 model, tokenizer = FastLanguageModel.from_pretrained(
@@ -98,33 +95,34 @@ model = FastLanguageModel.get_peft_model(
     random_state=42,
 )
 
-# === Training Arguments ===
-training_args = TrainingArguments(
-    output_dir="tat_llm_convfinqa_cot",
-    per_device_train_batch_size=4,
-    gradient_accumulation_steps=8,
-    num_train_epochs=3,
-    learning_rate=2e-5,
-    bf16=True,
-    logging_steps=1,
-    save_steps=25,
-    save_total_limit=2,
-)
-
-# === Trainer ===
-trainer = SFTTrainer(
-    model=model,
-    train_dataset=dataset,
-    tokenizer=tokenizer,
-    args=training_args,
-)
-
 # 🔧 Enable logits for training
 import os
 os.environ['UNSLOTH_RETURN_LOGITS'] = '1'
 
-trainer.train()
+# === Curriculum loop over epochs ===
+curriculum = [("easy", 1), ("medium", 1), ("hard", 1)]
+
+for phase, epochs in curriculum:
+    print(f"\n📚 Training on {phase} set for {epochs} epoch(s)...")
+    training_args = TrainingArguments(
+        output_dir=f"tat_llm_{phase}",
+        per_device_train_batch_size=4,
+        gradient_accumulation_steps=8,
+        num_train_epochs=epochs,
+        learning_rate=2e-5,
+        bf16=True,
+        logging_steps=1,
+        save_steps=25,
+        save_total_limit=2,
+    )
+    trainer = SFTTrainer(
+        model=model,
+        train_dataset=datasets[phase],
+        tokenizer=tokenizer,
+        args=training_args,
+    )
+    trainer.train()
 
 # === Save Final Model ===
-model.save_pretrained("tat_llm_convfinqa_cot")
-tokenizer.save_pretrained("tat_llm_convfinqa_cot")
+model.save_pretrained("tat_llm_convfinqa_curriculum")
+tokenizer.save_pretrained("tat_llm_convfinqa_curriculum")
