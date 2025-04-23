@@ -1,9 +1,10 @@
-# ConvFinQA: Finetuning and Evaluating a Chain-of-Thought LLM on Financial QA
+# ConvFinQA: Fine-Tuning and Evaluating a Chain-of-Thought LLM for Financial QA
+
 ---
 
 ## 🧠 Objective
 
-Fine-tune a small, instruction-tuned LLM on structured financial reasoning tasks (e.g., calculating ratios, extracting facts) with step-by-step supervision and evaluate its end-to-end performance using retrieval + reasoning metrics.
+Fine-tune a small, instruction-tuned LLM on structured financial reasoning tasks—such as calculating ratios and extracting numeric facts—with step-by-step supervision. Evaluate performance using both retrieval and reasoning metrics.
 
 ---
 
@@ -16,64 +17,81 @@ python3.10 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
+
 (Or use conda if preferred)
 
-⸻
+---
 
 ## 📝 Dataset
 
-We use curriculum_generated.jsonl – a cleaned and CoT-augmented version of ConvFinQA-style examples, created via teacher LLMs and schema-based curation.
+We use `curriculum_generated.jsonl` – a cleaned and CoT-augmented version of ConvFinQA-style examples, created via teacher LLMs and schema-based curation.
 
 Each entry includes:
 
-```
-  {"question": "...",
+```json
+{
+  "question": "...",
   "context": "...",
   "program": "...",
   "answer": "...",
   "reasoning": "...",
-  "table": "..."}   
+  "table": "..."
+}
 ```
-⸻
+
+---
 
 ## 🧪 Evaluation
 
 Evaluation is two-fold:
 
-1. Retrieval Accuracy (e.g. Recall@3)
+### 1. Retrieval Accuracy (e.g., Recall@3)
 
-```python eval/eval_retrieval_r@3.py```
+```bash
+python eval/eval_retrieval_r@3.py
+```
 
-2. Full LangGraph Execution Accuracy
+### 2. Full LangGraph Execution Accuracy
 
-```python eval/eval_langgraph.py```
+```bash
+python eval/eval_langgraph.py
+```
 
-This runs the model’s output program over retrieved tables and compares with gold answers.
+This runs the model’s predicted program over retrieved tables and compares results against gold answers.
 
-⸻
+---
 
 ## 🧬 Fine-Tuning
 
-✅ With LoRA
-```python scripts/fine_tune.py --config configs/config_finetune.yaml```
+Fine-tune with LoRA:
+
+```bash
+python scripts/fine_tune.py --config configs/config_finetune.yaml
+```
 
 This will:
-- Load a quantised model (e.g. from Hugging Face or local GGUF)
+- Load a quantized model (from Hugging Face or a local GGUF file)
 - Apply LoRA adapters
-- Train on the dataset with reasoning supervision
-- Save merged model + logs to checkpoints/
+- Train with reasoning supervision
+- Save merged model and logs to `checkpoints/`
 
-⸻
+---
 
 ## 🔍 Inference
 
-You can run a local inference pass using the same model:
-```python scripts/run_inference.py --input example.json --checkpoint ./checkpoints/oscar-lora```
-## ⚙️ Config (YAML)
+Run inference locally using a fine-tuned checkpoint:
 
-All hyperparameters are stored in configs/config_finetune.yaml:
-
+```bash
+python scripts/run_inference.py --input example.json --checkpoint ./checkpoints/oscar-lora
 ```
+
+---
+
+## ⚙️ Configuration
+
+All training hyperparameters are defined in `configs/config_finetune.yaml`:
+
+```yaml
 model_name_or_path: "meta-llama/Llama-2-7b-hf"
 output_dir: "./checkpoints/oscar-lora"
 dataset_path: "./data/curriculum_generated.jsonl"
@@ -88,17 +106,18 @@ lora_rank: 8
 lora_alpha: 16
 lora_dropout: 0.05
 ```
-⸻
 
-📚 Citation & Credits
+---
+
+## 📚 Citation & Credits
+
 - Built using Hugging Face Transformers, PEFT, and LangGraph.
 - Dataset adapted from ConvFinQA by TheFinAI + curriculum-generated CoT data.
 
-⸻
+---
 
-🛠️ Maintainer
+## 🛠️ Maintainer
 
-Michael Sigamani
-github.com/sigamani
+Michael Sigamani  
+[github.com/sigamani](https://github.com/sigamani)  
 Licensed under Apache 2.0
-
