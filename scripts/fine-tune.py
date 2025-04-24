@@ -1,4 +1,4 @@
-mport os
+import os
 import json
 import torch
 from transformers import TrainingArguments
@@ -11,10 +11,45 @@ from llm_eval_judge import (
 from dotenv import load_dotenv
 
 
+# Metric stabilisation for early stopping
+class MetricStabiliser:
+    def __init__(self, window=3, threshold=0.002):
+        self.history = {
+            "loss": [],
+            "accuracy": [],
+            "claude_score": [],
+        }
+        self.window = window
+        self.threshold = threshold
+
+    def update(self, loss, accuracy, claude_score):
+        self.history["loss"].append(loss)
+        self.history["accuracy"].append(accuracy)
+        self.history["claude_score"].append(claude_score)
+
+    def _is_stable(self, values):
+        if len(values) < self.window:
+            return False
+        recent = values[-self.window :]
+        return max(recent) - min(recent) < self.threshold
+
+    def should_stop(self):
+        return all(
+            [
+                self._is_stable(self.history["loss"]),
+                self._is_stable(self.history["accuracy"]),
+                self._is_stable(self.history["claude_score"]),
+            ]
+        )
+
+
 load_dotenv()
+
+
 # === Load and Format ===
 def load_and_format_dataset(filepath):
-    with open(filepath, "r") as f:        raw_data = [json.loads(line) for line in f if line.strip()]
+    with open(filepath, "r") as f:
+        raw_data = [json.loads(line) for line in f if line.strip()]
 
     def format_with_cot(example):
         final_answer_raw = example.get("Final Answer", "")
@@ -63,7 +98,6 @@ ply the correct calculation.
     return Dataset.from_list(formatted)
 
 
-
 # === Load and Split Dataset with Difficulty Heuristic ===
 from curriculum_loader import load_and_split_dataset
 
@@ -103,6 +137,7 @@ training_args = TrainingArguments(
 
 os.environ["UNSLOTH_RETURN_LOGITS"] = "1"
 
+
 # === Training Phases ===
 def train_segment(segment, label):
     print(f"\n==((====))== Training on {label.upper()} segment...")
@@ -125,7 +160,9 @@ def train_segment(segment, label):
 
         stabiliser.update(loss, accuracy, claude_score)
 
-        print(f"[{label.upper()}] Epoch {epoch}: Loss={loss:.4f}, Accuracy={accuracy:.4f}, Claude={claude_score:.4f}")
+        print(
+            f"[{label.upper()}] Epoch {epoch}: Loss={loss:.4f}, Accuracy={accuracy:.4f}, Claude={claude_score:.4f}"
+        )
         if stabiliser.should_stop():
             print(f"[__ {label.upper()}] Early stopping triggered at epoch {epoch}")
             break
@@ -152,8 +189,6 @@ model.save_pretrained("tat_llm_convfinqa_cot")
 tokenizer.save_pretrained("tat_llm_convfinqa_cot")
 
 
-
-
 import json
 import torch
 from transformers import TrainingArguments
@@ -165,6 +200,7 @@ from datasets import Dataset
 with open("data/train_curated.jsonl", "r") as f:
     raw_data = [json.loads(line) for line in f if line.strip()]
 
+
 # === Curriculum partition by program length ===
 def categorize(example):
     program = example.get("Program", "")
@@ -175,10 +211,12 @@ def categorize(example):
         return "medium"
     return "hard"
 
+
 categorized = {"easy": [], "medium": [], "hard": []}
 for ex in raw_data:
     category = categorize(ex)
     categorized[category].append(ex)
+
 
 # === Format and convert to dataset ===
 def format_with_cot(example):
@@ -209,8 +247,11 @@ Final Answer: {example.get("Final Answer", "")}
         "output": reasoning_template,
     }
 
+
 def merge_fields(example):
-    example["text"] = f"""
+    example[
+        "text"
+    ] = f"""
 ### Instruction:
 {example['instruction']}
 
@@ -222,6 +263,7 @@ def merge_fields(example):
 """
     return example
 
+
 # Apply formatting + merging
 datasets = {}
 for k in categorized:
@@ -229,7 +271,9 @@ for k in categorized:
     ds = Dataset.from_list(formatted).map(merge_fields)
     datasets[k] = ds
 
-print(f"[✅ DEBUG] Easy: {len(datasets['easy'])} | Medium: {len(datasets['medium'])} | Hard: {len(datasets['hard'])}")
+print(
+    f"[✅ DEBUG] Easy: {len(datasets['easy'])} | Medium: {len(datasets['medium'])} | Hard: {len(datasets['hard'])}"
+)
 
 # === Load Base Model ===
 model, tokenizer = FastLanguageModel.from_pretrained(
@@ -253,7 +297,8 @@ model = FastLanguageModel.get_peft_model(
 
 # 🔧 Enable logits for training
 import os
-os.environ['UNSLOTH_RETURN_LOGITS'] = '1'
+
+os.environ["UNSLOTH_RETURN_LOGITS"] = "1"
 
 # === Curriculum loop over epochs ===
 curriculum = [("easy", 1), ("medium", 1), ("hard", 1)]
