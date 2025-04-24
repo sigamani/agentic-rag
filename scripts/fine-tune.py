@@ -8,8 +8,10 @@ from datasets import Dataset
 from llm_eval_judge import (
     evaluate_final_answer_accuracy_claude as evaluate_final_answer_accuracy,
 )
+from dotenv import load_dotenv
 
 
+load_dotenv()
 # === Load and Format ===
 def load_and_format_dataset(filepath):
     with open(filepath, "r") as f:
@@ -64,13 +66,13 @@ def load_and_format_dataset(filepath):
 # === Load and Split Dataset with Difficulty Heuristic ===
 from curriculum_loader import load_and_split_dataset
 
-data_path = "data/train_curated.jsonl"
+data_path = "../data/train_curated.jsonl"
 easy, medium, hard = load_and_split_dataset(data_path)
 
 
 # === Load Model ===
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name="./merged_tat_llm_fp16",
+    model_name="../models/merged_tat_llm_fp16",
     max_seq_length=4096,
     dtype=torch.bfloat16,
     load_in_4bit=True,
@@ -101,6 +103,33 @@ training_args = TrainingArguments(
 os.environ["UNSLOTH_RETURN_LOGITS"] = "1"
 
 # === Training Phases ===
+def train_segment(segment, label):
+    print(f"\n==((====))== Training on {label.upper()} segment...")
+
+    trainer = SFTTrainer(
+        model=model,
+        train_dataset=segment,
+        tokenizer=tokenizer,
+        args=training_args,
+    )
+
+    stabiliser = MetricStabiliser(window=3, threshold=0.002)
+
+    for epoch in range(5):  # Allow up to 5 epochs per curriculum stage
+        trainer.train()
+        metrics = trainer.state.log_history[-1]
+        loss = metrics.get("loss", 0.0)
+        accuracy = metrics.get("mean_token_accuracy", 0.0)
+        claude_score = evaluate_final_answer_accuracy(segment, sample_size=100)
+
+        stabiliser.update(loss, accuracy, claude_score)
+
+        print(f"[{label.upper()}] Epoch {epoch}: Loss={loss:.4f}, Accuracy={accuracy:.4f}, Claude={claude_score:.4f}")
+        if stabiliser.should_stop():
+            print(f"[🛑 {label.upper()}] Early stopping triggered at epoch {epoch}")
+            break
+
+
 def train_segment(segment, label):
     print(f"\n==((====))== Training on {label.upper()} segment...")
     trainer = SFTTrainer(
