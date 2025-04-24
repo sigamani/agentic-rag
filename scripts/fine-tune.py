@@ -186,3 +186,13 @@ train_segment(hard, "hard")
 # === Save ===
 model.save_pretrained("tat_llm_convfinqa_cot")
 tokenizer.save_pretrained("tat_llm_convfinqa_cot")
+
+from peft import PeftModel
+
+model = PeftModel.from_pretrained(base_model, "outputs")
+model = model.merge_and_unload()
+
+# Save full merged model
+model.save_pretrained("outputs-merged")
+tokenizer.save_pretrained("outputs-merged")
+
