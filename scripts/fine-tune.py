@@ -1,97 +1,98 @@
 import os
-import torch
 import json
+import torch
 import argparse
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from peft import PeftModel
+import wandb
+from datasets import Dataset
 from transformers import TrainingArguments
 from trl import SFTTrainer
 from unsloth import FastLanguageModel
-from datasets import Dataset
-
+from dotenv import load_dotenv
 from utils.logging import setup_wandb
-from utils.metrics import MetricStabiliser, log_metrics_to_langsmith
+from utils.metrics import MetricStabiliser
 from llm_eval_judge import evaluate_final_answer_accuracy_claude as evaluate_final_answer_accuracy
+from curriculum_loader import load_and_split_dataset
+from langsmith import Client as LangSmithClient
 
-from unsloth import FastLanguageModel
+load_dotenv()
+langsmith_client = LangSmithClient()
 
-BASE_MODEL_PATH = "./models/merged_tat_llm_fp16"  # Already merged
+# --- CLI Arguments ---
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--base_model", type=str, default="michael-sigamani/llama2-7b-tat-lora-fp16", help="HF model path or local dir")
+    parser.add_argument("--output_dir", type=str, required="../models/llama2-7b-tat-lora-cot-fp16", help="Where to save finetuned model")
+    parser.add_argument("--data_path", type=str, default="../data/train_turn.jsonl")
+    return parser.parse_args()
 
-model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name=BASE_MODEL_PATH,
-    max_seq_length=4096,
-    dtype=torch.bfloat16,
-    load_in_4bit=True,
-)
-
-# --- Load Dataset ---
-def load_and_format_dataset(filepath):
-    with open(filepath, "r") as f:
-        raw_data = [json.loads(line) for line in f if line.strip()]
-
-    def format_with_cot(example):
-        reasoning_template = f"""
-        You are a financial reasoning assistant.
-        Given a question based on a financial report, think step-by-step to find the right values and apply calculations.
-        Always follow:
-        - Step 1: Rephrase the question.
-        - Step 2: Identify values.
-        - Step 3: Apply {example.get('Program', '')}
-        - Step 4: Compute.
-        Final Answer: {example.get('Final Answer', '')}
-        Question: {example['input']}
-        """
-        return {
-            "instruction": example["instruction"],
-            "input": example["input"],
-            "output": reasoning_template,
-            "Final Answer": example.get("Final Answer", ""),
-        }
-
-    formatted = list(map(format_with_cot, raw_data))
-    return Dataset.from_list(formatted)
-
-# --- Train Segment ---
-def train_segment(trainer, segment, label, max_epochs=5):
+# --- Training per Phase ---
+def train_segment(segment, label, model, tokenizer, output_dir):
     print(f"\n==((====))== Training on {label.upper()} segment...")
+
+    training_args = TrainingArguments(
+        output_dir=f"{output_dir}/{label}",
+        per_device_train_batch_size=4,
+        gradient_accumulation_steps=8,
+        num_train_epochs=5,
+        learning_rate=2e-5,
+        bf16=True,
+        logging_steps=1,
+        save_steps=25,
+        save_total_limit=2,
+        report_to=["wandb"],
+    )
+
+    trainer = SFTTrainer(
+        model=model,
+        train_dataset=segment,
+        tokenizer=tokenizer,
+        args=training_args,
+    )
+
     stabiliser = MetricStabiliser(window=3, threshold=0.002)
 
-    for epoch in range(max_epochs):
+    for epoch in range(5):
         trainer.train()
         metrics = trainer.state.log_history[-1]
         loss = metrics.get("loss", 0.0)
-        acc = metrics.get("mean_token_accuracy", 0.0)
-        claude_score = evaluate_final_answer_accuracy(segment, sample_size=100)
+        accuracy = metrics.get("mean_token_accuracy", 0.0)
 
-        stabiliser.update(loss, acc, claude_score)
+        # Claude Evaluation
+        claude_score, examples_for_logging = evaluate_final_answer_accuracy(segment, sample_size=100, return_examples=True)
 
-        print(f"[{label.upper()}] Epoch {epoch}: Loss={loss:.4f}, Acc={acc:.4f}, Claude={claude_score:.4f}")
-        log_metrics_to_langsmith(segment, trainer.model, label, epoch)
+        stabiliser.update(loss, accuracy, claude_score)
+
+        wandb.log({
+            "epoch": epoch,
+            f"{label}/loss": loss,
+            f"{label}/accuracy": accuracy,
+            f"{label}/claude_score": claude_score,
+        })
+
+        # LangSmith logging of eval examples
+        for ex in examples_for_logging:
+            langsmith_client.create_example(
+                inputs={"question": ex["question"]},
+                outputs={"model_reasoning": ex["model_reasoning"], "final_answer": ex["final_answer"]},
+                metadata={"phase": label, "epoch": epoch, "claude_score": ex["score"]},
+                dataset_name="convfinqa-finetune-evals"
+            )
+
+        print(f"[{label.upper()}] Epoch {epoch}: Loss={loss:.4f}, Acc={accuracy:.4f}, Claude={claude_score:.4f}")
 
         if stabiliser.should_stop():
-            print(f"[⏹ Early Stopping] on {label.upper()} at epoch {epoch}")
+            print(f"[__ {label.upper()}] Early stopping triggered at epoch {epoch}")
             break
 
 # --- Main ---
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--base_model", type=str, required=True)
-    parser.add_argument("--lora_adapter", type=str, required=False, default=None)
-    parser.add_argument("--output_dir", type=str, required=True)
-    parser.add_argument("--dataset_path", type=str, default="data/train_curated.jsonl")
-    args = parser.parse_args()
-
-    merged_model_path = merge_lora_if_needed(
-        base_model_name=args.base_model,
-        lora_adapter_path=args.lora_adapter,
-        merged_save_path=args.output_dir,
-    )
-
-    # Setup Weights and Biases
+    args = parse_args()
     setup_wandb()
 
+    os.environ['UNSLOTH_RETURN_LOGITS'] = '1'
+
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=merged_model_path,
+        model_name=args.base_model,
         max_seq_length=4096,
         dtype=torch.bfloat16,
         load_in_4bit=True,
@@ -108,33 +109,14 @@ def main():
         random_state=42,
     )
 
-    training_args = TrainingArguments(
-        output_dir=args.output_dir,
-        per_device_train_batch_size=4,
-        gradient_accumulation_steps=8,
-        num_train_epochs=1,
-        learning_rate=2e-5,
-        bf16=True,
-        logging_steps=1,
-        save_steps=25,
-        save_total_limit=2,
-        report_to="wandb",
-    )
+    easy, medium, hard = load_and_split_dataset(args.data_path)
+    curriculum = [(easy, "easy"), (medium, "medium"), (hard, "hard")]
 
-    dataset = load_and_format_dataset(args.dataset_path)
-
-    trainer = SFTTrainer(
-        model=model,
-        train_dataset=dataset,
-        tokenizer=tokenizer,
-        args=training_args,
-    )
-
-    train_segment(trainer, dataset, label="FULL", max_epochs=5)
+    for segment, label in curriculum:
+        train_segment(segment, label, model, tokenizer, args.output_dir)
 
     model.save_pretrained(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
-    print(f"[✅] Model saved to {args.output_dir}")
 
 if __name__ == "__main__":
     main()
