@@ -1,10 +1,33 @@
 import os
+import json
 import re
 import anthropic
+from langsmith import Client
 
-client = anthropic.Anthropic(
-    api_key=os.environ.get("CLAUDE_API_KEY")
-)
+# Setup clients
+claude_client = anthropic.Anthropic(api_key=os.environ.get("CLAUDE_API_KEY"))
+langsmith_client = Client()
+
+# ---------------- Push segment to LangSmith ---------------- #
+def push_segment_to_langsmith(segment, difficulty_label, dataset_name):
+    dataset = next((ds for ds in langsmith_client.list_datasets() if ds.name == dataset_name), None)
+    if not dataset:
+        dataset = langsmith_client.create_dataset(dataset_name)
+
+    for entry in segment:
+        inputs = {
+            "instruction": entry.get("instruction", ""),
+            "input": entry.get("input", ""),
+            "difficulty": difficulty_label
+        }
+        outputs = {
+            "reasoning": entry.get("output", ""),
+            "program": entry.get("Program", ""),
+            "answer": str(entry.get("Final Answer", ""))
+        }
+        langsmith_client.create_example(inputs=inputs, outputs=outputs, dataset_id=dataset.id)
+
+
 
 def score_flexible_final_answer(reasoning: str, final_answer: str) -> float:
     """
@@ -12,29 +35,29 @@ def score_flexible_final_answer(reasoning: str, final_answer: str) -> float:
     Returns 1.0, 0.5, or 0.0 based on human-style judgment.
     """
     prompt = f"""
-You are an expert tutor evaluating a student's financial reasoning.
-
-They were asked to solve a financial question and gave the following explanation and final answer.
-
-Please judge with empathy — this student is learning, so small errors in formatting or rounding are acceptable.
-
-Use the following rubric:
-- 1.0 = Final answer is correct or acceptably close; reasoning is sound and complete.
-- 0.5 = Reasoning is partially correct; logic mostly works, some flaws.
-- 0.0 = Reasoning is incorrect or final answer is clearly wrong.
-
-Respond ONLY with a numeric score: 1.0, 0.5, or 0.0 — no explanation.
-
----
-
-Reasoning:
-{reasoning}
-
-Final Answer (as claimed by the student):
-{final_answer}
-
-Score:
-"""
+    You are an expert tutor evaluating a student's financial reasoning.
+    
+    They were asked to solve a financial question and gave the following explanation and final answer.
+    
+    Please judge with empathy — this student is learning, so small errors in formatting or rounding are acceptable.
+    
+    Use the following rubric:
+    - 1.0 = Final answer is correct or acceptably close; reasoning is sound and complete.
+    - 0.5 = Reasoning is partially correct; logic mostly works, some flaws.
+    - 0.0 = Reasoning is incorrect or final answer is clearly wrong.
+    
+    Respond ONLY with a numeric score: 1.0, 0.5, or 0.0 — no explanation.
+    
+    ---
+    
+    Reasoning:
+    {reasoning}
+    
+    Final Answer (as claimed by the student):
+    {final_answer}
+    
+    Score:
+    """
 
     try:
         response = client.messages.create(

@@ -14,10 +14,10 @@ from utils.metrics import MetricStabiliser
 from utils.llm_eval_judge import evaluate_final_answer_accuracy
 from utils.curriculum_loader import load_and_split_dataset
 from langsmith import Client as LangSmithClient
+from utils.llm_eval_judge import push_segment_to_langsmith
 
 load_dotenv()
 langsmith_client = LangSmithClient()
-
 
 # --- CLI Arguments ---
 def parse_args():
@@ -35,11 +35,15 @@ def parse_args():
         help="Where to save finetuned model",
     )
     parser.add_argument("--data_path", type=str, default="data/train_curated.jsonl")
+    parser.add_argument(
+        "--langsmith_dataset",
+        type=str,
+        default="convfinqa-cot-train2",
+    )
     return parser.parse_args()
 
-
 # --- Training per Phase ---
-def train_segment(segment, label, model, tokenizer, output_dir):
+def train_segment(segment, label, model, tokenizer, output_dir, langsmith_dataset):
     print(f"\n==((====))== Training on {label.upper()} segment...")
 
     training_args = TrainingArguments(
@@ -70,10 +74,17 @@ def train_segment(segment, label, model, tokenizer, output_dir):
         loss = metrics.get("loss", 0.0)
         accuracy = metrics.get("mean_token_accuracy", 0.0)
 
-        # Claude-style reasoning quality eval
-        claude_score = evaluate_final_answer_accuracy(segment, sample_size=100)
+        claude_score, _ = evaluate_final_answer_accuracy(segment, sample_size=100)
 
-        stabiliser.update(loss, accuracy, claude_score)
+        # Push evaluated examples and Claude score to LangSmith
+        push_segment_to_langsmith(segment, label, dataset_name=langsmith_dataset)
+
+        langsmith_client.create_example(
+            inputs={"segment_label": label},
+            outputs={"claude_score": claude_score},
+            metadata={"phase": label, "epoch": epoch},
+            dataset_name=langsmith_dataset,
+        )
 
         wandb.log(
             {
@@ -84,20 +95,6 @@ def train_segment(segment, label, model, tokenizer, output_dir):
             }
         )
 
-        # Ensure LangSmith dataset exists
-        try:
-            langsmith_client.read_dataset(dataset_name="convfinqa-finetune-evals")
-        except:
-            langsmith_client.create_dataset(name="convfinqa-finetune-evals")
-
-        # Log metrics to LangSmith
-        langsmith_client.create_example(
-            inputs={"segment_label": label},
-            outputs={"loss": loss, "accuracy": accuracy, "claude_score": claude_score},
-            metadata={"phase": label, "epoch": epoch},
-            dataset_name="convfinqa-finetune-evals",
-        )
-
         print(
             f"[{label.upper()}] Epoch {epoch}: Loss={loss:.4f}, Acc={accuracy:.4f}, Claude={claude_score:.4f}"
         )
@@ -105,7 +102,6 @@ def train_segment(segment, label, model, tokenizer, output_dir):
         if stabiliser.should_stop():
             print(f"[__ {label.upper()}] Early stopping triggered at epoch {epoch}")
             break
-
 
 # --- Main ---
 def main():
@@ -136,11 +132,11 @@ def main():
     curriculum = [(easy, "easy"), (medium, "medium"), (hard, "hard")]
 
     for segment, label in curriculum:
-        train_segment(segment, label, model, tokenizer, args.output_dir)
+        train_segment(segment, label, model, tokenizer, args.output_dir, args.langsmith_dataset)
 
     model.save_pretrained(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
 
-
 if __name__ == "__main__":
     main()
+
