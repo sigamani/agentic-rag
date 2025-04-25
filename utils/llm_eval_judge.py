@@ -1,67 +1,61 @@
+from anthropic import Client as ClaudeClient
 import os
-import json
-import anthropic
-from datasets import Dataset
 
-client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+client = ClaudeClient(api_key=os.environ["ANTHROPIC_API_KEY"])
 
-
-def score_flexible_final_answer_claude(reasoning: str, final_answer: str) -> float:
+def evaluate_final_answer_accuracy_claude(dataset, sample_size=100):
     """
-    Uses Claude (Anthropic) to judge the reasoning quality and final answer accuracy.
-    The judge is lenient and focuses on logical plausibility, not formatting.
+    Uses Claude to score reasoning and final answer quality.
+    Always returns (average_score, sample_examples).
     """
+    results = []
+    examples = []
+    subset = dataset.select(range(min(sample_size, len(dataset))))
 
-    prompt = f"""
-You are a financial reasoning tutor evaluating a student's explanation.
+    for ex in subset:
+        reasoning = ex.get("output", "")
+        expected_answer = ex.get("Final Answer", "")
 
-They were given a quantitative question and responded with the following explanation and final numeric answer.
+        prompt = f"""\
+You are an expert tutor evaluating a student's financial reasoning.
 
-Please be understanding _ this is a model in training. Use this rubric:
+They gave the following explanation and final answer. Score how well it matches the correct answer.
 
-- 1.0 = Excellent reasoning, clear logic, leads to correct or nearly correct final answer.
-- 0.5 = Reasoning is partially correct or imprecise, but shows understanding.
-- 0.0 = Reasoning is clearly flawed or answer is nonsensical.
+Be flexible with rounding and formatting. Use:
 
-Only reply with the numeric score: 1.0, 0.5, or 0.0.
+- 1.0 = Strong logical reasoning, and correct or close final answer
+- 0.5 = Partial logic or unclear answer
+- 0.0 = Wrong or missing answer
 
 ---
 
-Explanation:
+Reasoning:
 {reasoning}
 
-Final Answer:
-{final_answer}
+Expected Answer: {expected_answer}
 
 Score:"""
 
-    try:
-        response = client.messages.create(
-            model="claude-3-opus-20240229",
-            max_tokens=5,
-            temperature=0,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        content = response.content[0].text.strip()
-        return float(content)
-    except Exception as e:
-        print(f"[_ Claude Eval Error] {e}")
-        return 0.0
+        try:
+            response = client.messages.create(
+                model="claude-3-opus-20240229",
+                max_tokens=1,
+                temperature=0,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            score = float(response.content[0].text.strip())
+        except Exception as e:
+            print(f"[Claude Eval Error] {e}")
+            score = 0.0
 
-
-def evaluate_final_answer_accuracy_claude(dataset: Dataset, sample_size=500) -> float:
-    """
-    Evaluate a sample of dataset examples using Claude to judge the quality of their reasoning.
-    """
-    print("[__ Claude Evaluation] Scoring reasoning quality on subset...")
-    subset = dataset.select(range(min(sample_size, len(dataset))))
-    results = []
-    for ex in subset:
-        reasoning = ex.get("output", "")
-        final = ex.get("Final Answer", "")
-        score = score_flexible_final_answer_claude(reasoning, str(final))
         results.append(score)
+        examples.append({
+            "question": ex.get("input", ""),
+            "model_reasoning": reasoning,
+            "final_answer": expected_answer,
+            "score": score,
+        })
 
     avg_score = sum(results) / len(results) if results else 0.0
     print(f"[__ Claude Score]: {avg_score:.3f} over {len(results)} examples")
-    return avg_score
+    return avg_score, examples
