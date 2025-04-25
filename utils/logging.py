@@ -1,6 +1,6 @@
 import wandb
 
-def init_wandb(project_name="pr-convfinqa", run_name="01"):
+def setup_wandb(project_name="pr-convfinqa", run_name="01"):
     wandb.init(
         project=project_name,
         name=run_name,
