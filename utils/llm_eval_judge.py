@@ -49,7 +49,7 @@ Score:"""
         return 0.0
 
 
-def evaluate_final_answer_accuracy_claude(dataset: Dataset, sample_size=100) -> float:
+def evaluate_final_answer_accuracy_claude(dataset: Dataset, sample_size=500) -> float:
     """
     Evaluate a sample of dataset examples using Claude to judge the quality of their reasoning.
     """
