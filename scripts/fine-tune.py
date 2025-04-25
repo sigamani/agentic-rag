@@ -40,7 +40,7 @@ def train_curriculum_model(base_model_path, output_dir):
     # Curriculum
     curriculum = [("easy", 5), ("medium", 5), ("hard", 5)]
     for phase, max_epochs in curriculum:
-        print(f"\n==((====))== Training on {phase.upper()} segment...")
+        print(f"\n======== Training on {phase.upper()} segment...")
         training_args = TrainingArguments(
             output_dir=f"{output_dir}_{phase}",
             per_device_train_batch_size=4,
@@ -90,6 +90,5 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", type=str, required=True, help="Directory to save final model")
     args = parser.parse_args()
 
-    setup_wandb("pr-convfinqa-01"")
+    setup_wandb("pr-convfinqa-01")
     train_curriculum_model(args.base_model, args.output_dir)
-
