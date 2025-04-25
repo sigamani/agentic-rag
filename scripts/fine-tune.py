@@ -10,8 +10,8 @@ from unsloth import FastLanguageModel
 from dotenv import load_dotenv
 from utils.logging import setup_wandb
 from utils.metrics import MetricStabiliser
-from llm_eval_judge import evaluate_final_answer_accuracy_claude as evaluate_final_answer_accuracy
-from curriculum_loader import load_and_split_dataset
+from utils.llm_eval_judge import evaluate_final_answer_accuracy_claude as evaluate_final_answer_accuracy
+from utils.curriculum_loader import load_and_split_dataset
 from langsmith import Client as LangSmithClient
 
 load_dotenv()

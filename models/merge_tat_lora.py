@@ -5,7 +5,7 @@ import os
 
 BASE_MODEL = "NousResearch/Llama-2-7b-hf"           # Requires HF auth
 LORA_ADAPTER = "next-tat/tat-llm-7b-lora"
-MERGED_SAVE_PATH = "./merged_tat_llm_fp16"
+MERGED_SAVE_PATH = "./llama2-tb_tat_lora_fp16"
 
 os.makedirs(MERGED_SAVE_PATH, exist_ok=True)
 
@@ -30,4 +30,4 @@ print("Saving tokenizer...")
 tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
 tokenizer.save_pretrained(MERGED_SAVE_PATH)
 
-print("✅ Merge complete.")
+print("Merge complete.")
