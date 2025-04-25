@@ -1,53 +1,34 @@
 import os
 import json
 import torch
-import argparse
 import wandb
 from datasets import Dataset
-from transformers import TrainingArguments
+from transformers import TrainingArguments, AutoModelForCausalLM, AutoTokenizer
 from trl import SFTTrainer
-from unsloth import FastLanguageModel
 from dotenv import load_dotenv
-from peft import PeftModel
 from utils.logging import setup_wandb
 from utils.metrics import MetricStabiliser
-from utils.llm_eval_judge import evaluate_final_answer_accuracy
+from utils.llm_eval_judge import evaluate_final_answer_accuracy, push_segment_to_langsmith
 from utils.curriculum_loader import load_and_split_dataset
 from langsmith import Client as LangSmithClient
-from utils.llm_eval_judge import push_segment_to_langsmith
+from huggingface_hub import HfApi, login
 
 load_dotenv()
 langsmith_client = LangSmithClient()
 
-# --- CLI Arguments ---
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--base_model",
-        type=str,
-        default="models/llama2-7b_tat_lora_fp16",
-        help="HF model path or local dir",
-    )
-    parser.add_argument(
-        "--output_dir",
-        type=str,
-        default="models/llama2-7b-tat-lora-cot-fp16",
-        help="Where to save finetuned model",
-    )
-    parser.add_argument("--data_path", type=str, default="data/train_curated.jsonl")
-    parser.add_argument(
-        "--langsmith_dataset",
-        type=str,
-        default="convfinqa-cot-train2",
-    )
-    return parser.parse_args()
+# --- Constants ---
+BASE_MODEL = "michael-sigamani/llama2-7b-tat-convfinqa-fp16"
+OUTPUT_DIR = "models/llama2-7b-tat-convfinqa-curriculum-cot-fp16"
+DATA_PATH = "data/train_curated.jsonl"
+LANGSMITH_DATASET = "convfinqa-cot-train2"
+HF_REPO_ID = "michael-sigamani/llama2-7b-tat-convfinqa-Curriculum-CoT-fp16"
 
 # --- Training per Phase ---
-def train_segment(segment, label, model, tokenizer, output_dir, langsmith_dataset):
+def train_segment(segment, label, model, tokenizer):
     print(f"\n==((====))== Training on {label.upper()} segment...")
 
     training_args = TrainingArguments(
-        output_dir=f"{output_dir}/{label}",
+        output_dir=f"{OUTPUT_DIR}/{label}",
         per_device_train_batch_size=4,
         gradient_accumulation_steps=8,
         num_train_epochs=5,
@@ -77,13 +58,13 @@ def train_segment(segment, label, model, tokenizer, output_dir, langsmith_datase
         claude_score, _ = evaluate_final_answer_accuracy(segment, sample_size=100)
 
         # Push evaluated examples and Claude score to LangSmith
-        push_segment_to_langsmith(segment, label, dataset_name=langsmith_dataset)
+        push_segment_to_langsmith(segment, label, dataset_name=LANGSMITH_DATASET)
 
         langsmith_client.create_example(
             inputs={"segment_label": label},
             outputs={"claude_score": claude_score},
             metadata={"phase": label, "epoch": epoch},
-            dataset_name=langsmith_dataset,
+            dataset_name=LANGSMITH_DATASET,
         )
 
         wandb.log(
@@ -105,38 +86,39 @@ def train_segment(segment, label, model, tokenizer, output_dir, langsmith_datase
 
 # --- Main ---
 def main():
-    args = parse_args()
     setup_wandb()
 
-    os.environ["UNSLOTH_RETURN_LOGITS"] = "1"
-
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=args.base_model,
-        max_seq_length=4096,
-        dtype=torch.bfloat16,
-        load_in_4bit=True,
+    print("Loading base model...")
+    tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, trust_remote_code=True)
+    model = AutoModelForCausalLM.from_pretrained(
+        BASE_MODEL,
+        torch_dtype=torch.bfloat16,
+        device_map="auto",
+        trust_remote_code=True
     )
 
-    model = FastLanguageModel.get_peft_model(
-        model,
-        r=16,
-        lora_alpha=32,
-        lora_dropout=0.0,
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
-        bias="none",
-        use_gradient_checkpointing="unsloth",
-        random_state=42,
-    )
-
-    easy, medium, hard = load_and_split_dataset(args.data_path)
+    easy, medium, hard = load_and_split_dataset(DATA_PATH)
     curriculum = [(easy, "easy"), (medium, "medium"), (hard, "hard")]
 
     for segment, label in curriculum:
-        train_segment(segment, label, model, tokenizer, args.output_dir, args.langsmith_dataset)
+        train_segment(segment, label, model, tokenizer)
 
-    model.save_pretrained(args.output_dir)
-    tokenizer.save_pretrained(args.output_dir)
+    model.save_pretrained(OUTPUT_DIR)
+    tokenizer.save_pretrained(OUTPUT_DIR)
+
+    # --- Upload merged model to Hugging Face ---
+    print(f"Uploading {OUTPUT_DIR} to Hugging Face Hub: {HF_REPO_ID}")
+    login(token=os.environ.get("HF_TOKEN"))
+    api = HfApi()
+    api.upload_folder(
+        folder_path=OUTPUT_DIR,
+        repo_id=HF_REPO_ID,
+        repo_type="model",
+        commit_message="Upload final fine-tuned ConvFinQA Curriculum CoT model",
+        private=False,
+    )
+
+    print("✅ Upload complete!")
 
 if __name__ == "__main__":
     main()
-
