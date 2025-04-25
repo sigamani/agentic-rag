@@ -7,10 +7,10 @@ from transformers import TrainingArguments
 from trl import SFTTrainer
 from unsloth import FastLanguageModel
 from datasets import Dataset
-from curriculum_loader import load_and_split_dataset
-from llm_eval_judge import evaluate_final_answer_accuracy_claude as evaluate_final_answer_accuracy
-from logging import setup_wandb
-from metrics import MetricStabiliser
+from utils.curriculum_loader import load_and_split_dataset
+from utils.llm_eval_judge import evaluate_final_answer_accuracy_claude as evaluate_final_answer_accuracy
+from utils.logging import setup_wandb
+from utils.metrics import MetricStabiliser
 
 
 def main():
