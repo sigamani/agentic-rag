@@ -8,22 +8,35 @@ from transformers import TrainingArguments
 from trl import SFTTrainer
 from unsloth import FastLanguageModel
 from dotenv import load_dotenv
+from peft import PeftModel
 from utils.logging import setup_wandb
 from utils.metrics import MetricStabiliser
-from utils.llm_eval_judge import evaluate_final_answer_accuracy_claude as evaluate_final_answer_accuracy
+from utils.llm_eval_judge import evaluate_final_answer_accuracy
 from utils.curriculum_loader import load_and_split_dataset
 from langsmith import Client as LangSmithClient
 
 load_dotenv()
 langsmith_client = LangSmithClient()
 
+
 # --- CLI Arguments ---
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--base_model", type=str, default="models/llama2-7b_tat_lora_fp16", help="HF model path or local dir")
-    parser.add_argument("--output_dir", type=str, default="models/llama2-7b-tat-lora-cot-fp16", help="Where to save finetuned model")
+    parser.add_argument(
+        "--base_model",
+        type=str,
+        default="models/llama2-7b_tat_lora_fp16",
+        help="HF model path or local dir",
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="models/llama2-7b-tat-lora-cot-fp16",
+        help="Where to save finetuned model",
+    )
     parser.add_argument("--data_path", type=str, default="data/train_curated.jsonl")
     return parser.parse_args()
+
 
 # --- Training per Phase ---
 def train_segment(segment, label, model, tokenizer, output_dir):
@@ -57,39 +70,49 @@ def train_segment(segment, label, model, tokenizer, output_dir):
         loss = metrics.get("loss", 0.0)
         accuracy = metrics.get("mean_token_accuracy", 0.0)
 
-        # Claude Evaluation
-        claude_score, examples_for_logging = evaluate_final_answer_accuracy(segment, sample_size=100, return_examples=True)
+        # Claude-style reasoning quality eval
+        claude_score = evaluate_final_answer_accuracy(segment, sample_size=100)
 
         stabiliser.update(loss, accuracy, claude_score)
 
-        wandb.log({
-            "epoch": epoch,
-            f"{label}/loss": loss,
-            f"{label}/accuracy": accuracy,
-            f"{label}/claude_score": claude_score,
-        })
+        wandb.log(
+            {
+                "epoch": epoch,
+                f"{label}/loss": loss,
+                f"{label}/accuracy": accuracy,
+                f"{label}/claude_score": claude_score,
+            }
+        )
 
-        # LangSmith logging of eval examples
-        for ex in examples_for_logging:
-            langsmith_client.create_example(
-                inputs={"question": ex["question"]},
-                outputs={"model_reasoning": ex["model_reasoning"], "final_answer": ex["final_answer"]},
-                metadata={"phase": label, "epoch": epoch, "claude_score": ex["score"]},
-                dataset_name="convfinqa-finetune-evals"
-            )
+        # Ensure LangSmith dataset exists
+        try:
+            langsmith_client.read_dataset(dataset_name="convfinqa-finetune-evals")
+        except:
+            langsmith_client.create_dataset(name="convfinqa-finetune-evals")
 
-        print(f"[{label.upper()}] Epoch {epoch}: Loss={loss:.4f}, Acc={accuracy:.4f}, Claude={claude_score:.4f}")
+        # Log metrics to LangSmith
+        langsmith_client.create_example(
+            inputs={"segment_label": label},
+            outputs={"loss": loss, "accuracy": accuracy, "claude_score": claude_score},
+            metadata={"phase": label, "epoch": epoch},
+            dataset_name="convfinqa-finetune-evals",
+        )
+
+        print(
+            f"[{label.upper()}] Epoch {epoch}: Loss={loss:.4f}, Acc={accuracy:.4f}, Claude={claude_score:.4f}"
+        )
 
         if stabiliser.should_stop():
             print(f"[__ {label.upper()}] Early stopping triggered at epoch {epoch}")
             break
+
 
 # --- Main ---
 def main():
     args = parse_args()
     setup_wandb()
 
-    os.environ['UNSLOTH_RETURN_LOGITS'] = '1'
+    os.environ["UNSLOTH_RETURN_LOGITS"] = "1"
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.base_model,
@@ -117,6 +140,7 @@ def main():
 
     model.save_pretrained(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
+
 
 if __name__ == "__main__":
     main()
