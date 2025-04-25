@@ -90,5 +90,6 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", type=str, required=True, help="Directory to save final model")
     args = parser.parse_args()
 
-    setup_wandb("finetune-convfinqa")
+    setup_wandb("pr-convfinqa-01"")
     train_curriculum_model(args.base_model, args.output_dir)
+
