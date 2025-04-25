@@ -13,30 +13,16 @@ from utils.logging import setup_wandb
 from utils.metrics import MetricStabiliser, log_metrics_to_langsmith
 from llm_eval_judge import evaluate_final_answer_accuracy_claude as evaluate_final_answer_accuracy
 
-# --- Merge LoRA if Needed ---
-def merge_lora_if_needed(base_model_name, lora_adapter_path, merged_save_path):
-    if os.path.exists(merged_save_path):
-        print(f"[🧹] Merged model already exists at {merged_save_path}, skipping merge.")
-        return merged_save_path
+from unsloth import FastLanguageModel
 
-    os.makedirs(merged_save_path, exist_ok=True)
-    print(f"[🔄] Merging LoRA adapter into base model...")
+BASE_MODEL_PATH = "./models/merged_tat_llm_fp16"  # Already merged
 
-    base_model = AutoModelForCausalLM.from_pretrained(
-        base_model_name,
-        torch_dtype=torch.float16,
-        device_map="auto",
-    )
-
-    merged_model = PeftModel.from_pretrained(base_model, lora_adapter_path)
-    merged_model = merged_model.merge_and_unload()
-
-    merged_model.save_pretrained(merged_save_path)
-    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
-    tokenizer.save_pretrained(merged_save_path)
-
-    print(f"[✅] Merge complete. Saved to {merged_save_path}")
-    return merged_save_path
+model, tokenizer = FastLanguageModel.from_pretrained(
+    model_name=BASE_MODEL_PATH,
+    max_seq_length=4096,
+    dtype=torch.bfloat16,
+    load_in_4bit=True,
+)
 
 # --- Load Dataset ---
 def load_and_format_dataset(filepath):
