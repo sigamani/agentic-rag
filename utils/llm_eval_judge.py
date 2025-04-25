@@ -3,7 +3,7 @@ import os
 
 client = ClaudeClient(api_key=os.environ["ANTHROPIC_API_KEY"])
 
-def evaluate_final_answer_accuracy_claude(dataset, sample_size=100):
+def evaluate_final_answer_accuracy(dataset, sample_size):
     """
     Uses Claude to score reasoning and final answer quality.
     Always returns (average_score, sample_examples).
@@ -17,24 +17,24 @@ def evaluate_final_answer_accuracy_claude(dataset, sample_size=100):
         expected_answer = ex.get("Final Answer", "")
 
         prompt = f"""\
-You are an expert tutor evaluating a student's financial reasoning.
-
-They gave the following explanation and final answer. Score how well it matches the correct answer.
-
-Be flexible with rounding and formatting. Use:
-
-- 1.0 = Strong logical reasoning, and correct or close final answer
-- 0.5 = Partial logic or unclear answer
-- 0.0 = Wrong or missing answer
-
----
-
-Reasoning:
-{reasoning}
-
-Expected Answer: {expected_answer}
-
-Score:"""
+    You are an expert tutor evaluating a student's financial reasoning.
+    
+    They gave the following explanation and final answer. Score how well it matches the correct answer.
+    
+    Be flexible with rounding and formatting. Use:
+    
+    - 1.0 = Strong logical reasoning, and correct or close final answer
+    - 0.5 = Partial logic or unclear answer
+    - 0.0 = Wrong or missing answer
+    
+    ---
+    
+    Reasoning:
+    {reasoning}
+    
+    Expected Answer: {expected_answer}
+    
+    Score:"""
 
         try:
             response = client.messages.create(
