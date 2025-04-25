@@ -20,8 +20,8 @@ langsmith_client = LangSmithClient()
 # --- CLI Arguments ---
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--base_model", type=str, default="michael-sigamani/llama2-7b-tat-lora-fp16", help="HF model path or local dir")
-    parser.add_argument("--output_dir", type=str, required="models/llama2-7b-tat-lora-cot-fp16", help="Where to save finetuned model")
+    parser.add_argument("--base_model", type=str, default="models/llama2-7b_tat_lora_fp16", help="HF model path or local dir")
+    parser.add_argument("--output_dir", type=str, default="models/llama2-7b-tat-lora-cot-fp16", help="Where to save finetuned model")
     parser.add_argument("--data_path", type=str, default="data/train_curated.jsonl")
     return parser.parse_args()
 
