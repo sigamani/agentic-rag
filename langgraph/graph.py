@@ -65,7 +65,7 @@ if __name__ == "__main__":
     for output in graph.stream(
         inputs,
         config={
-            "callbacks": [langfuse_handler],
+            # "callbacks": [langfuse_handler],  # removed undefined handler
             "configurable": typed_dict_to_dict(GraphConfig),
         },
     ):
