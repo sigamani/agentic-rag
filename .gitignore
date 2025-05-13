@@ -4,4 +4,4 @@ ConvFinQA
 .env
 vector_database
 eval.csv
-*.ggufdata/train_turn_cot_cleaned.json
+*.gguf
