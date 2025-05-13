@@ -1,5 +1,4 @@
-# OSCAR: Optimized Structured Conversational Answers for Reasoning 
-
+# ConvFinQA RAG Pipeline
 - Emphasizes structure, conversation, and reasoning—perfect for ConvFinQA-style multiturn datasets
 - Oscar is also the lovable yet misunderstood grouch from Sesame Street
 ---
