@@ -1,0 +1,34 @@
+# Core ML stack with CUDA 11.7 support
+torch==1.13.1+cu117
+torchvision==0.14.1+cu117
+torchaudio==0.13.1
+--extra-index-url https://download.pytorch.org/whl/cu117
+
+# Hugging Face stack
+transformers==4.26.1
+datasets==2.10.1
+evaluate==0.4.0
+accelerate==0.16.0
+tokenizers==0.13.2
+
+# Data handling and metrics
+scikit-learn==1.2.1
+pandas==1.5.3
+numpy==1.23.5
+
+# Visualisation
+matplotlib==3.6.3
+seaborn==0.12.2
+
+# Utilities
+tqdm==4.64.1
+PyYAML==6.0
+regex==2022.10.31
+sentencepiece==0.1.97
+protobuf==3.20.3
+
+# Experiment tracking (optional)
+wandb==0.13.10
+
+# LangChain ecosystem (optional for tracing/logging)
+langsmith==0.0.17

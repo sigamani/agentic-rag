@@ -56,7 +56,11 @@ def main(input_path, output_path, max_examples=5):
         data = json.load(f)
 
     results = []
-    for entry in tqdm(data[:max_examples], desc="Processing examples"):
+    flushed = 0
+    output_file = Path(output_path)
+    output_file.unlink(missing_ok=True)
+
+    for i, entry in enumerate(tqdm(data[:max_examples], desc="Processing examples")):
         prompt = format_prompt(entry)
         response = llm.invoke(prompt)
         try:
@@ -67,10 +71,22 @@ def main(input_path, output_path, max_examples=5):
                 {"id": entry["id"], "error": str(e), "raw_response": response}
             )
 
-    with open(output_path, "w") as f:
-        for r in results:
-            f.write(json.dumps(r) + "\n")
-    print(f"✅ Saved {len(results)} entries to {output_path}")
+        # Write partial results every 50 entries
+        if len(results) >= flush_interval:
+            with output_file.open("a") as f:
+                for r in results:
+                    f.write(json.dumps(r) + "\n")
+            flushed += len(results)
+            print(f"💾 Flushed {flushed} entries to {output_path}")
+            results = []
+
+    # Write any remaining entries
+    if results:
+        with output_file.open("a") as f:
+            for r in results:
+                f.write(json.dumps(r) + "\n")
+        print(f"✅ Final flush: wrote {len(results)} more entries to {output_path}")
+
 
 
 if __name__ == "__main__":
