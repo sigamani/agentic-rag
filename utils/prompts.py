@@ -1,5 +1,6 @@
 from langchain.prompts import PromptTemplate
 
+<<<<<<< HEAD:prompts.py
 generate_answer_and_program_prompt = PromptTemplate(
     template = '''
     You are a financial reasoning assistant. Your task is to read a user's natural language question and a structured table, then generate a precise answer using mathematical reasoning.
@@ -39,6 +40,44 @@ generate_answer_and_program_prompt = PromptTemplate(
 )
 
 
+=======
+
+# Usage:
+# normalized_prompt = normalize_facts_prompt.format(table_json=json.dumps(sample_table, indent=2))
+normalize_facts_prompt = PromptTemplate(
+    input_variables=["table_json"],
+    template="""
+        You are a financial document parser.
+
+        You will receive a JSON object representing a table extracted from a financial report. The table is accompanied by `pre_text` and `post_text` — context paragraphs surrounding the table in the original document.
+
+        Your task is to extract a list of normalized financial facts from the table.
+
+        For each relevant cell in the table:
+        - Determine the **type of metric** (e.g., Revenue, EPS, Margin, Assets) using column headers.
+        - Extract the **numerical value**, and normalize it to **standard scientific notation** with 2 decimal places and 3 significant figures (e.g., "3.40E-1" for 0.34).
+        - Infer the **unit** (e.g., USD, %, EPS, Billion) using the header or cell text.
+        - Determine the **time** the value refers to. This is often encoded in row headers (e.g., “Q1”, “2020”, or “March 2021”).
+        - Choose the most relevant sentence from `pre_text` or `post_text` that mentions or helps explain this value.
+
+        Return a list of JSON objects. Each object should have the following fields:
+        - "id": A unique identifier composed from the base "id" and row/column info (e.g., "ABC/2020/page_5.pdf-Row2-Revenue").
+        - "type": The name of the metric (e.g., "Revenue").
+        - "value": The value in scientific notation (e.g., "1.20E+9").
+        - "unit": The unit associated (e.g., "USD").
+        - "time": A universal date like "2020-01-01" or "2020-Q1".
+        - "description": The best sentence from the context.
+
+### Input JSON
+        {table_json}
+
+        Return only valid JSON.
+        """
+)
+
+
+
+>>>>>>> main:utils/prompts.py
 # Prompt
 reason_and_answer_prompt_template = PromptTemplate(
     template="""You are an investment analyst. You will be given: 
@@ -71,7 +110,6 @@ reason_and_answer_prompt_template = PromptTemplate(
             <REASONING>
                 To calculate the percentage change, we can use the formula:
 
-                percentage_change = ((new_value - old_value) / old_value) * 100
 
                 Substituting the given values:
 
@@ -143,6 +181,7 @@ eval_prompt_template = PromptTemplate(
     """,
     input_variables=["question", "actual_answer", "expected_answer"],
 )
+
 
 extract_anwer_prompt_template = PromptTemplate(
     template="""
@@ -219,33 +258,11 @@ filter_context_prompt_template = PromptTemplate(
 )
 
 
-generate_queries_prompt_template = PromptTemplate(
-    template="""
-    <INSTRUCTIONS>
-        You will be provided with a QUESTION asked by the user.
+generate_queries_prompt_template = PromptTemplate.from_template(
+    """Given this financial question, write 3 search queries that retrieve evidence to answer it.
 
-        Your task is to generate a set of precise and relevant search queries that can be used to retrieve documents from a database to answer the QUESTION.
+Question: {question}
 
-        Please ensure that the queries are comprehensive enough to cover all aspects of the QUESTION but also specific enough to filter out irrelevant information.
-
-        Only return the search queries, and nothing else. Separate each query with a newline.
-    </INSTRUCTIONS>
-    <EXAMPLE>
-         <INPUT>
-            <QUESTION>What was the total revenue for the company in the last three quarters?</QUESTION>
-        </INPUT>
-        <OUTPUT>
-            Total revenue last three quarters
-            Revenue Q1 2024
-            Revenue Q2 2024
-            Revenue Q3 2024
-            Revenue Q4 2023
-            Sum of quarterly revenue figures
-        </OUTPUT>
-    </EXAMPLE>
-    <INPUT>
-        <QUESTION>{question}</QUESTION>\n
-    </INPUT>
-    """,
-    input_variables=["question"],
+Queries:"""
 )
+

@@ -8,7 +8,7 @@ from nodes import (
     generate,
     extract_answer,
     retrieve,
-    rerank,
+#    rerank,
     generate_queries,
 )
 from state import AgentState
@@ -30,7 +30,7 @@ workflow = StateGraph(AgentState, config_schema=GraphConfig)
 workflow.add_node("extract_question", extract_question)
 workflow.add_node("generate_queries", generate_queries)
 workflow.add_node("retriever", retrieve)
-workflow.add_node("reranker", rerank)
+#workflow.add_node("reranker", rerank)
 workflow.add_node("generator", generate)
 workflow.add_node("extract_answer", extract_answer)
 
@@ -39,8 +39,9 @@ workflow.set_entry_point("extract_question")
 
 workflow.add_edge("extract_question", "generate_queries")
 workflow.add_edge("generate_queries", "retriever")
-workflow.add_edge("retriever", "reranker")
-workflow.add_edge("reranker", "generator")
+workflow.add_edge("retriever", "generator")
+#workflow.add_edge("retriever", "reranker")
+#workflow.add_edge("reranker", "generator")
 workflow.add_edge("generator", "extract_answer")
 
 workflow.set_finish_point("extract_answer")
@@ -64,7 +65,7 @@ if __name__ == "__main__":
     for output in graph.stream(
         inputs,
         config={
-            "callbacks": [langfuse_handler],
+            # "callbacks": [langfuse_handler],  # removed undefined handler
             "configurable": typed_dict_to_dict(GraphConfig),
         },
     ):
