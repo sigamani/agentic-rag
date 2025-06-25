@@ -1,6 +1,5 @@
 from langchain.prompts import PromptTemplate
 
-<<<<<<< HEAD:prompts.py
 generate_answer_and_program_prompt = PromptTemplate(
     template = '''
     You are a financial reasoning assistant. Your task is to read a user's natural language question and a structured table, then generate a precise answer using mathematical reasoning.
@@ -40,8 +39,6 @@ generate_answer_and_program_prompt = PromptTemplate(
 )
 
 
-=======
-
 # Usage:
 # normalized_prompt = normalize_facts_prompt.format(table_json=json.dumps(sample_table, indent=2))
 normalize_facts_prompt = PromptTemplate(
@@ -77,7 +74,6 @@ normalize_facts_prompt = PromptTemplate(
 
 
 
->>>>>>> main:utils/prompts.py
 # Prompt
 reason_and_answer_prompt_template = PromptTemplate(
     template="""You are an investment analyst. You will be given: 

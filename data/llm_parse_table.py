@@ -72,6 +72,7 @@ def main(input_path, output_path, max_examples=5):
             )
 
         # Write partial results every 50 entries
+        flush_interval = 50
         if len(results) >= flush_interval:
             with output_file.open("a") as f:
                 for r in results:
