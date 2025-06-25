@@ -1,19 +1,59 @@
-from typing import Annotated
-from typing import TypedDict, Sequence
+from typing import Annotated, Sequence, Optional, List
+from pydantic import BaseModel, Field
 from langgraph.graph import add_messages
 from langchain_core.messages import BaseMessage
+from langchain_core.documents import Document
 from operator import add
 
 
-class AgentState(TypedDict):
-    messages: Annotated[Sequence[BaseMessage], add_messages]  # Chat messages
-    steps: Annotated[list[str], add]  # Agent steps
-    question: str  # Query executed against the database to retrieve documents
-    documents: list[str]  # Retrieved documents (context)
-    reranked_documents: list[str]
-    prompt: str  # Prompt used for generation
-    generation: str  # Generated text
-    answer: str  # Generated final answer
-    queries: list[str]  # Queries used to retrieve documents
-    context: str  # Context to use to answer the question. It is a subset of all documents, trimmed to only what is relevant
-    sources: list[str]
+class AgentState(BaseModel):
+    """Pydantic v2 model for the financial RAG workflow state."""
+    
+    messages: Annotated[Sequence[BaseMessage], add_messages] = Field(
+        default_factory=list, 
+        description="Chat messages in the conversation"
+    )
+    steps: Annotated[List[str], add] = Field(
+        default_factory=list,
+        description="Agent processing steps"
+    )
+    question: str = Field(
+        default="",
+        description="User question to be answered"
+    )
+    documents: List[Document] = Field(
+        default_factory=list,
+        description="Retrieved documents for context"
+    )
+    reranked_documents: List[Document] = Field(
+        default_factory=list,
+        description="Reranked documents after relevance scoring"
+    )
+    prompt: str = Field(
+        default="",
+        description="Generated prompt for the LLM"
+    )
+    generation: str = Field(
+        default="",
+        description="LLM generated response"
+    )
+    answer: str = Field(
+        default="",
+        description="Final extracted answer"
+    )
+    queries: List[str] = Field(
+        default_factory=list,
+        description="Search queries for document retrieval"
+    )
+    context: str = Field(
+        default="",
+        description="Filtered context from relevant documents"
+    )
+    sources: List[str] = Field(
+        default_factory=list,
+        description="Source document IDs used in the answer"
+    )
+    
+    class Config:
+        """Pydantic v2 configuration."""
+        arbitrary_types_allowed = True

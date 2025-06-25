@@ -1,17 +1,47 @@
-# ConvFinQA RAG Pipeline
-- Emphasizes structure, conversation, and reasoning—perfect for ConvFinQA-style multiturn datasets
-- Oscar is also the lovable yet misunderstood grouch from Sesame Street
----
+# Financial RAG Assistant
+
+A ConvFinQA RAG (Retrieval-Augmented Generation) pipeline that fine-tunes small instruction-tuned LLMs on structured financial reasoning tasks. Built with modern tooling including uv package management, Pydantic v2 state management, and LangGraph workflow orchestration.
+
+## 🏗️ Architecture Overview
+
+![Data Flow Diagram](financial_rag_dataflow.png)
+
+### Core Components
+
+- **LangGraph Workflow**: Multi-node graph orchestrating the complete RAG pipeline
+- **Pydantic v2 State**: Type-safe state management with validation and constraints
+- **Mock System**: Comprehensive testing without external LLM/vector DB dependencies
+- **uv Package Manager**: Modern Python packaging with `pyproject.toml`
+
+### Data Flow
+
+1. **Question Extraction** → Extract user question from input messages
+2. **Query Generation** → Generate 3 search queries using LLM
+3. **Document Retrieval** → Vector similarity search across financial documents  
+4. **Reranking** → Relevance scoring and filtering (optional)
+5. **Context Assembly** → Format retrieved documents into structured context
+6. **LLM Generation** → Financial reasoning with step-by-step analysis
+7. **Answer Extraction** → Parse final answer from LLM response
+
+![AgentState Structure](agent_state_structure.png)
 
 ## 🧠 Objective
 
-Fine-tune a small, instruction-tuned LLM on structured financial reasoning tasks—such as calculating ratios and extracting numeric facts—with step-by-step supervision. Evaluate performance using both retrieval and reasoning metrics.
-
----
+Fine-tune small, instruction-tuned LLMs on structured financial reasoning tasks—calculating ratios, extracting numeric facts, and multi-step financial analysis—with step-by-step supervision and retrieval augmentation.
 
 ## 📦 Installation
 
-### 1. Create Environment
+### Modern Setup with uv
+
+```bash
+# Install uv package manager
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create environment and install dependencies
+uv sync
+```
+
+### Legacy Setup
 
 ```bash
 python3.10 -m venv venv
@@ -19,7 +49,31 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-(Or use conda if preferred)
+## 🧪 Testing
+
+### End-to-End Pipeline Test
+
+Test the complete workflow without external dependencies:
+
+```bash
+uv run python test_workflow.py
+```
+
+This runs a comprehensive test using mock LLM and retrieval systems to validate:
+- Individual workflow nodes
+- Complete pipeline execution  
+- Multiple question types
+- Pydantic v2 state management
+
+### Generate Architecture Diagrams
+
+```bash
+uv run python data_flow_diagram.py
+```
+
+Creates visual diagrams:
+- `financial_rag_dataflow.png` - Complete pipeline architecture
+- `agent_state_structure.png` - Pydantic v2 state model
 
 ---
 

@@ -6,6 +6,67 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a ConvFinQA RAG (Retrieval-Augmented Generation) pipeline that fine-tunes small instruction-tuned LLMs on structured financial reasoning tasks. The system performs step-by-step financial calculations and table reasoning with retrieval and generation components.
 
+## 🏗️ Current Architecture (Updated 2025-06-25)
+
+### Data Flow Pipeline
+
+```
+User Question → Extract Question → Generate Queries → Document Retrieval → 
+Context Assembly → LLM Generation → Answer Extraction → Final Answer
+```
+
+**Visual Diagrams**: See `financial_rag_dataflow.png` and `agent_state_structure.png` for complete architecture overview.
+
+### State Management (Pydantic v2)
+
+The system uses `AgentState` (Pydantic v2 model) for type-safe state management:
+
+- **messages**: Conversation history (Sequence[BaseMessage])
+- **question**: User's financial question (str)
+- **queries**: Generated search queries (List[str])
+- **documents**: Retrieved documents (List[Document])
+- **context**: Assembled context text (str)
+- **generation**: LLM response (str)
+- **answer**: Final extracted answer (str)
+
+### Package Management
+
+- **Primary**: `uv` package manager with `pyproject.toml`
+- **Environment**: Python 3.10+ with macOS M1 Metal support
+- **Dependencies**: Text-only ML stack (torch, transformers, langchain, langgraph)
+- **Excluded**: Linux-only libraries (unsloth, xformers, bitsandbytes)
+
+### Testing System
+
+- **Mock LLM**: `models/llm_stub.py` - generates realistic financial responses
+- **Mock Retrieval**: `data/retrieve_stub.py` - financial document stubs
+- **End-to-End Test**: `test_workflow.py` - complete pipeline validation
+- **Run Tests**: `uv run python test_workflow.py` (validates complete pipeline)
+
+### Directory Structure (Updated)
+
+```
+financial-rag-assistant/
+├── workflow/              # LangGraph pipeline (renamed from langgraph/)
+│   ├── graph.py          # Workflow orchestration
+│   ├── nodes.py          # Individual processing nodes
+│   ├── nodes_test.py     # Test nodes with mock dependencies
+│   └── state.py          # Pydantic v2 AgentState model
+├── models/
+│   ├── llm.py           # Real LLM integration (Ollama)
+│   └── llm_stub.py      # Mock LLM for testing
+├── data/
+│   ├── retrieve.py      # Real retrieval system
+│   └── retrieve_stub.py # Mock retrieval for testing
+├── utils/
+│   ├── prompts.py       # Cleaned prompt templates
+│   └── data_preprocessing.py # Financial data normalization
+├── config.py            # Pydantic v2 configuration schema
+├── pyproject.toml       # uv package management
+├── test_workflow.py     # End-to-end pipeline test
+└── *.png               # Architecture diagrams
+```
+
 ## Key Architecture Components
 
 ### Core Pipeline (LangGraph)
