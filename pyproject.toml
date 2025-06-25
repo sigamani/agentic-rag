@@ -1,0 +1,44 @@
+[project]
+name = "financial-rag-assistant"
+version = "0.1.0"
+description = "ConvFinQA RAG pipeline that fine-tunes small instruction-tuned LLMs on structured financial reasoning tasks"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    # Core ML stack with Metal Performance Shaders for macOS M1 (text-only)
+    "torch>=2.0.0",
+    # Hugging Face stack (macOS compatible versions)
+    "transformers>=4.30.0",
+    "datasets>=2.10.1",
+    "evaluate>=0.4.0", 
+    "accelerate>=0.20.0",
+    "tokenizers",
+    # Data handling and metrics
+    "scikit-learn>=1.2.0",
+    "pandas>=1.5.0",
+    "numpy>=1.23.0",
+    # Visualisation
+    "matplotlib>=3.6.0",
+    "seaborn>=0.12.0",
+    # Utilities
+    "tqdm>=4.64.0",
+    "PyYAML>=6.0",
+    "regex",
+    "sentencepiece",
+    "protobuf",
+    # Experiment tracking
+    "wandb>=0.15.0",
+    # LangChain ecosystem for RAG pipeline
+    "langsmith>=0.1.0",
+    "langchain-core",
+    "langchain-community", 
+    "langchain-ollama",
+    "langgraph",
+    "cohere",
+    # RAG dependencies (macOS M1 compatible)
+    "chromadb",
+    "sentence-transformers",
+    "ollama",
+    # Note: Removed unsloth, xformers, bitsandbytes - Linux-only libraries
+    # For M1 Mac, we'll use native PyTorch Metal Performance Shaders
+]

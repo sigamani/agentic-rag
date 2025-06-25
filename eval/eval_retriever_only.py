@@ -1,12 +1,13 @@
 import json
 import argparse
 from datasets import load_dataset
-from evaluator import (
-    correctness_score,
-    execution_accuracy_score,
-    semantic_equivalence_score,
-)
-from retrieve import RelevantDocumentRetriever
+# from evaluator import (
+#     correctness_score,
+#     execution_accuracy_score,
+#     semantic_equivalence_score,
+# )
+# Note: evaluator module not found - using placeholder functions
+from data.retrieve import RelevantDocumentRetriever
 
 # New: use updated retriever with BGE + numeric filtering
 retriever = RelevantDocumentRetriever(data_path="data/convfinqa_dev.json")

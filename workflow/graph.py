@@ -3,7 +3,7 @@ from langchain_core.messages import HumanMessage
 import dotenv
 from config import GraphConfig
 
-from nodes import (
+from .nodes import (
     extract_question,
     generate,
     extract_answer,
@@ -11,7 +11,7 @@ from nodes import (
 #    rerank,
     generate_queries,
 )
-from state import AgentState
+from .state import AgentState
 
 from langsmith.run_helpers import traceable
 from utils import typed_dict_to_dict

@@ -1,6 +1,6 @@
 # eval_dual_retrieval_r_at3.py
 import json
-from retrieve import RelevantDocumentRetriever
+from data.retrieve import RelevantDocumentRetriever
 
 
 def load_jsonl(filepath):

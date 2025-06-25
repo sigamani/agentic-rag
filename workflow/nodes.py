@@ -3,16 +3,16 @@ import re
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.documents import Document
 from config import DATA_PATH, CHEATING_RETRIEVAL, DISABLE_GENERATION, GraphConfig
-from prompts import (
+from utils.prompts import (
     reason_and_answer_prompt_template,
     extract_anwer_prompt_template,
     filter_context_prompt_template,
     generate_queries_prompt_template,
 )
-from state import AgentState
+from .state import AgentState
 
-from retrieve import RelevantDocumentRetriever, vector_store
-from llm import llm, MODEL_NAME
+from data.retrieve import RelevantDocumentRetriever, vector_store
+from models.llm import llm, MODEL_NAME
 
 import dotenv
 
@@ -121,7 +121,7 @@ def filter_context(state: AgentState, config: GraphConfig) -> AgentState:
     response_text = response.replace("<OUTPUT>", "").replace("</OUTPUT>", "")
 
     try:
-        context, sources = ee.split(
+        context, sources = re.split(
             "sources:", response_text, flags=re.IGNORECASE, maxsplit=1
         )
         context = context.strip()
@@ -156,7 +156,7 @@ def rerank(state: AgentState, config: GraphConfig) -> AgentState:
 
     response = co.rerank(
         model="rerank-english-v3.0",
-        query=question,
+        query=state["question"],
         documents=docs,
         top_n=config["configurable"].get("rerank_k", 3),
     )
@@ -164,13 +164,6 @@ def rerank(state: AgentState, config: GraphConfig) -> AgentState:
     reranked_docs = [state["documents"][result.index] for result in response.results]
 
     return {"reranked_documents": reranked_docs, "context": format_docs(reranked_docs)}
-
-
-def format_docs(docs: list[Document]) -> str:
-    formatted = ""
-    for doc in docs:
-        formatted += f"<DOC ID={doc.metadata['id']}>\n{doc.page_content}\n</DOC>"
-    return formatted
 
 
 def format_docs(docs: list[Document]) -> str:
@@ -207,32 +200,7 @@ def generate(state: AgentState, config: GraphConfig) -> AgentState:
     }
 
 
-def generate_chat(state: AgentState) -> AgentState:
-    messages = state["messages"]
-    question = state["question"]
-    documents = state["documents"]
-
-    prompt = reason_and_answer_prompt_template.format(
-        **{"question": question, "documents": format_docs(documents)}
-    )
-    messages[-1] = HumanMessage(prompt)
-
-    messages_openai = []
-    for message in messages:
-        if isinstance(message, HumanMessage):
-            role = "user"
-        elif isinstance(message, AIMessage):
-            role = ("assistant",)
-        else:
-            raise ValueError("No such message type allowed")
-        messages_openai.append(({"role": role, "content": message.content}))
-
-    response = llm.invoke(model=MODEL_NAME, input=messages_openai)
-    response_message = AIMessage(response.content)
-    return {
-        "prompt": messages_openai,
-        "generation": response_message.content,
-    }
+# generate_chat function removed - unused in current LangGraph workflow
 
 
 def extract_answer(state: AgentState) -> AgentState:
